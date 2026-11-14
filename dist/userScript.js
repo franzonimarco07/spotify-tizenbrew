@@ -1,4 +1,4 @@
-/* Spotify TV Mod v0.4.0 — motore no-ads + UI TV per il web player di Spotify.
+/* Spotify TV Mod v0.4.1 — motore no-ads + UI TV per il web player di Spotify.
  * Modulo TizenBrew. Le parti di blocco delle pubblicità derivano da
  * T-64/spotify-ad-skip e tomer8007/spotify-web-ads-remover (GPL-3.0). */
 "use strict";
@@ -1382,14 +1382,14 @@
       diag.push((/* @__PURE__ */ new Date()).toTimeString().substr(0, 8) + " " + msg);
       if (diag.length > 60) diag.shift();
     }
-    d("boot v0.4.0 \u2014 " + location.href.substr(0, 60));
+    d("boot v0.4.1 \u2014 " + location.href.substr(0, 60));
     window.addEventListener("error", function(e) {
       d("ERRORE: " + (e.message || "") + " @ " + (e.filename || "").split("/").pop() + ":" + e.lineno);
     });
     var top = window.self === window.top;
     var cfg = window.__spotifyTvConfig || {};
     window.__spotifyTv = {
-      version: "0.4.0",
+      version: "0.4.1",
       debug: true,
       log: diag,
       diag: function() {
