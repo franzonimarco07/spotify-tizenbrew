@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Spotify TV Mod — anteprima UI</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  iframe { width: 100vw; height: 100vh; border: 0; }
+</style>
+</head>
+<body>
+<!--
+  Anteprima locale della sola interfaccia TV.
+
+  Il modulo viene caricato DENTRO la pagina di sotto, come fa TizenBrew, quindi
+  questa pagina deve essere quella "top": non possiamo mettere il finto player
+  in un iframe figlio. Il trucco è il contrario: qui c'è un finto player
+  completo (mock-player.js), il modulo si monta sopra, e ogni iframe che crea
+  la UI viene servito dallo stesso documento tramite una rotta finta.
+
+  Serve solo a guardare la UI: il modulo vero gira su open.spotify.com.
+-->
+<script>
+  // Le viste (Home/Cerca/Raccolta) sono iframe con path tipo /search: qui li
+  // serviamo con una pagina di riempimento, così non compare "Not found".
+  var VIEW = /^\/(search|collection|library|home)(\/|$)/;
+  if (VIEW.test(location.pathname)) {
+    document.documentElement.innerHTML =
+      '<head><title>Spotify (finta)</title></head><body style="margin:0;background:#121212;color:#8a8a8a;' +
+      'font-family:system-ui;display:grid;place-items:center;height:100vh">' +
+      '<div style="text-align:center"><div style="font-size:40px;color:#1ed760;font-weight:800">Spotify</div>' +
+      '<p>contenuto della vista «' + location.pathname + '» (finto, solo per l\'anteprima)</p></div></body>';
+  } else {
+    var s = document.createElement('script');
+    s.src = '../../tools/preview/mock-player.js';
+    document.head.appendChild(s);
+    var mod = document.createElement('script');
+    mod.src = '../../dist/userScript.js';
+    document.head.appendChild(mod);
+  }
+</script>
+</body>
+</html>
