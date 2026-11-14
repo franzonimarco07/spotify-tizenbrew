@@ -11,6 +11,25 @@ import { st, setPlaying, setPosition, setVolume, setTrack, setAd } from './state
 
 function q(sel) { return document.querySelector(sel); }
 
+/* L'elemento audio/video che Spotify fa suonare: è l'unica fonte affidabile per
+ * "sta suonando?" (l'etichetta del tasto di Spotify dice "Pausa" anche da fermo). */
+var media = null;
+function trackMedia(m) {
+  media = m;
+  if (m.__stv) return;
+  m.__stv = true;
+  ['playing', 'pause', 'ended', 'emptied'].forEach(function (type) {
+    m.addEventListener(type, function () { if (m === media) setPlaying(!m.paused && !m.ended); });
+  });
+}
+try {
+  var origPlay = HTMLMediaElement.prototype.play;
+  HTMLMediaElement.prototype.play = function () {
+    trackMedia(this);
+    return origPlay.apply(this, arguments);
+  };
+} catch (e) { }
+
 function click(sel) {
   var el = q(sel);
   if (el) {
@@ -85,8 +104,56 @@ export function setVol(v) {
 
 export function volumeDelta(d) { setVol((st.volume || 0) + d); }
 
+/* Cambio pagina senza ricaricare: Spotify è una single page app che ascolta
+ * la history del browser, quindi basta pushState + popstate. */
 export function navigate(path) {
-  location.hash = '#' + path;
+  if (location.pathname === path) return;
+  history.pushState({}, '', path);
+  window.dispatchEvent(new PopStateEvent('popstate', { state: {} }));
+}
+
+function mouseClick(e) {
+  var r = e.getBoundingClientRect();
+  var opts = { bubbles: true, cancelable: true, view: window, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
+  ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(function (type) {
+    var Ev = /^pointer/.test(type) && window.PointerEvent ? PointerEvent : MouseEvent;
+    e.dispatchEvent(new Ev(type, opts));
+  });
+}
+
+/* OK del telecomando su un elemento della pagina di Spotify. */
+export function activate(e) {
+  if (e.tagName === 'INPUT' || e.tagName === 'TEXTAREA') {
+    e.focus();
+    return;
+  }
+  // riga di una tracklist: si suona il brano (sul web è il doppio clic,
+  // oppure il tasto play nascosto nella prima colonna)
+  if (e.getAttribute('role') === 'row' || e.getAttribute('data-testid') === 'tracklist-row') {
+    var playBtn = e.querySelector('button[aria-label^="Riproduci"], button[aria-label^="Play"]');
+    if (playBtn) { playBtn.click(); return; }
+    var r = e.getBoundingClientRect();
+    e.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: window,
+      clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }));
+    return;
+  }
+  if (e.tagName === 'A' || e.tagName === 'BUTTON') { e.click(); return; }
+  // schede e altri elementi con role=button: Spotify spesso ascolta i mouse event
+  mouseClick(e);
+}
+
+export function login() {
+  var b = q('[data-testid="login-button"]');
+  if (b) b.click();
+  else location.href = 'https://accounts.spotify.com/login?continue=' + encodeURIComponent('https://open.spotify.com/');
+}
+
+function parseTime(txt) {
+  if (!txt) return NaN;
+  var parts = txt.trim().split(':').map(Number);
+  var s = 0;
+  for (var i = 0; i < parts.length; i++) s = s * 60 + parts[i];
+  return s;
 }
 
 export function back() {
@@ -97,11 +164,7 @@ export function back() {
  * nulla, proviamo a dedurlo dai suoi elementi. */
 export function pollDomState() {
   try {
-    var btn = q('[data-testid="control-button-playpause"]');
-    if (btn) {
-      var label = (btn.getAttribute('aria-label') || btn.title || '').toLowerCase();
-      if (label) setPlaying(label.indexOf('pause') !== -1 || label.indexOf('pausa') !== -1);
-    }
+    if (media) setPlaying(!media.paused && !media.ended);
     var title = q('[data-testid="context-item-info-title"]');
     var artist = q('[data-testid="context-item-info-artist"]');
     var art = q('[data-testid="cover-art-image"] img, [data-testid="now-playing-widget"] img');
@@ -116,6 +179,10 @@ export function pollDomState() {
         });
       }
     }
+    var dur = parseTime((q('[data-testid="playback-duration"]') || {}).textContent);
+    if (isFinite(dur) && dur > 0) st.duration = dur;
+    var pos = parseTime((q('[data-testid="playback-position"]') || {}).textContent);
+    if (isFinite(pos)) setPosition(pos);
     var sub = q('[data-testid="context-item-info-ad-subtitle"]');
     setAd(!!sub);
   } catch (e) { }
@@ -131,6 +198,6 @@ export function init() {
     if (isFinite(d) && d > 0 && st.duration && Math.abs(d - st.duration) > 3) setPosition(Math.min(st.position, d));
   });
   on('media_playing', function (p) { setPlaying(p); });
-  setInterval(pollDomState, 1500);
+  setInterval(pollDomState, 1000);
   pollDomState();
 }

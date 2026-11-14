@@ -11,7 +11,8 @@ import { startUi } from './ui.js';
 import { on, emit } from './bus.js';
 import { st } from './state.js';
 import * as player from './player.js';
-import { ui, show, hide, toast, focusPlayer } from './registry.js';
+import { ui, show, hide, focusPlayer } from './registry.js';
+import { startBasicNav } from './basicnav.js';
 
 (function boot() {
   if (window.__spotifyTv) return;
@@ -83,6 +84,12 @@ import { ui, show, hide, toast, focusPlayer } from './registry.js';
   }
 
   /* ------------------------------------------------- 2. UI e telecomando */
+  // Fuori dal player (pagina di login) basta una navigazione minima.
+  if (top && location.hostname !== 'open.spotify.com') {
+    startBasicNav();
+    d('pagina esterna: navigazione minima');
+    return;
+  }
   if (top) {
     try { player.init(); d('player collegato'); } catch (e) { d('player KO: ' + e.message); }
     if (cfg.tvUi !== false) {
@@ -125,6 +132,12 @@ import { ui, show, hide, toast, focusPlayer } from './registry.js';
   window.addEventListener('keydown', function (e) {
     var k = e.keyCode;
     var handled = true;
+    var a = document.activeElement;
+    var typing = a && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && !/^(button|checkbox|radio|submit)$/.test(a.type)));
+
+    // Nel campo di ricerca sinistra/destra e OK servono alla tastiera.
+    if (typing && (k === KEY.LEFT || k === KEY.RIGHT || k === KEY.ENTER)) return;
+    if (typing && (k === KEY.UP || k === KEY.DOWN)) a.blur();
 
     if (top && uiVisible()) {
       switch (k) {

@@ -8,6 +8,18 @@ Spotify sul web player delle TV Samsung, come modulo [TizenBrew](https://github.
 
 Funziona con il piano di Spotify dell'account usato (Free con pubblicità, Premium senza).
 
+## Telecomando
+
+| Tasto | Cosa fa |
+|---|---|
+| frecce | menu in alto, contenuti della pagina, player in basso |
+| OK | apre una scheda, suona un brano, attiva un tasto; sul campo di ricerca apre la tastiera |
+| Indietro | pagina precedente, poi torna al menu |
+| play/pausa, avanti, indietro | controllano la musica |
+| BLU | va ai comandi del player |
+| GIALLO | diagnostica a schermo |
+| ROSSO | ricarica |
+
 ## Installazione
 
 TizenBrew → Module Manager → GitHub → `franzonimarco07/spotify-tizenbrew` (senza `gh/`).

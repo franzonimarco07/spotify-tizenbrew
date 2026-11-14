@@ -72,3 +72,16 @@ Developer mode della TV 2: si attiva da App → `12345`. Per installare da Mac, 
 - Repository del modulo: `~/spotify-tizenbrew`. Sorgenti studiati e file temporanei nello scratchpad della sessione, non necessari.
 - Tool Tizen: `~/tizen-studio/tools/sdb`, `~/tizen-studio/tools/ide/bin/tizen`.
 - Certificato Samsung: `~/tizen-studio-data/tizenbrew-cert/` (riservato, non condividere).
+
+## 6. Aggiornamento v0.5.0 (14/11/2026, sera)
+- Rimossi il motore no-ads (`src/noads.js`) e il service CDP (`dist/service*.js`). Il service bloccava `*track-playback*`,
+  l'endpoint di tutta la riproduzione: era la causa probabile di "Ora Spotify non può riprodurre questo contenuto".
+- `src/ui.js` riscritta come "skin TV" su un solo web player: niente iframe (ogni iframe era un web player in più).
+  CSS che nasconde le barre di Spotify, porta la sua ricerca nella nostra barra in alto, disattiva animazioni e
+  backdrop-filter; navigazione a zone (menu / contenuto spaziale con hit-test / player); splash animato e velo di
+  caricamento al cambio pagina.
+- `src/player.js`: cambio pagina con `history.pushState` + `popstate`, OK su righe brano / schede / tasti,
+  stato "in riproduzione" letto dall'elemento media di Spotify, posizione e durata dal DOM.
+- `src/basicnav.js`: navigazione minima sulla pagina di login (accounts.spotify.com).
+- Provato sul Mac in Chrome headless con `open.spotify.com` senza account: splash, navigazione, ricerca, apertura
+  pagine, ritorno. Da verificare sulla TV: login, riproduzione, velocità.

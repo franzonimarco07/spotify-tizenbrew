@@ -78,8 +78,10 @@
   // src/player.js
   var player_exports = {};
   __export(player_exports, {
+    activate: () => activate,
     back: () => back,
     init: () => init,
+    login: () => login,
     navigate: () => navigate,
     next: () => next,
     pollDomState: () => pollDomState,
@@ -93,6 +95,26 @@
   function q(sel) {
     return document.querySelector(sel);
   }
+  var media = null;
+  function trackMedia(m) {
+    media = m;
+    if (m.__stv) return;
+    m.__stv = true;
+    ["playing", "pause", "ended", "emptied"].forEach(function(type) {
+      m.addEventListener(type, function() {
+        if (m === media) setPlaying(!m.paused && !m.ended);
+      });
+    });
+  }
+  try {
+    origPlay = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function() {
+      trackMedia(this);
+      return origPlay.apply(this, arguments);
+    };
+  } catch (e) {
+  }
+  var origPlay;
   function click(sel) {
     var el2 = q(sel);
     if (el2) {
@@ -158,18 +180,63 @@
     setVol((st.volume || 0) + d);
   }
   function navigate(path) {
-    location.hash = "#" + path;
+    if (location.pathname === path) return;
+    history.pushState({}, "", path);
+    window.dispatchEvent(new PopStateEvent("popstate", { state: {} }));
+  }
+  function mouseClick(e) {
+    var r = e.getBoundingClientRect();
+    var opts = { bubbles: true, cancelable: true, view: window, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
+    ["pointerdown", "mousedown", "pointerup", "mouseup", "click"].forEach(function(type) {
+      var Ev = /^pointer/.test(type) && window.PointerEvent ? PointerEvent : MouseEvent;
+      e.dispatchEvent(new Ev(type, opts));
+    });
+  }
+  function activate(e) {
+    if (e.tagName === "INPUT" || e.tagName === "TEXTAREA") {
+      e.focus();
+      return;
+    }
+    if (e.getAttribute("role") === "row" || e.getAttribute("data-testid") === "tracklist-row") {
+      var playBtn = e.querySelector('button[aria-label^="Riproduci"], button[aria-label^="Play"]');
+      if (playBtn) {
+        playBtn.click();
+        return;
+      }
+      var r = e.getBoundingClientRect();
+      e.dispatchEvent(new MouseEvent("dblclick", {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        clientX: r.left + r.width / 2,
+        clientY: r.top + r.height / 2
+      }));
+      return;
+    }
+    if (e.tagName === "A" || e.tagName === "BUTTON") {
+      e.click();
+      return;
+    }
+    mouseClick(e);
+  }
+  function login() {
+    var b = q('[data-testid="login-button"]');
+    if (b) b.click();
+    else location.href = "https://accounts.spotify.com/login?continue=" + encodeURIComponent("https://open.spotify.com/");
+  }
+  function parseTime(txt) {
+    if (!txt) return NaN;
+    var parts = txt.trim().split(":").map(Number);
+    var s = 0;
+    for (var i = 0; i < parts.length; i++) s = s * 60 + parts[i];
+    return s;
   }
   function back() {
     if (history.length > 1) history.back();
   }
   function pollDomState() {
     try {
-      var btn = q('[data-testid="control-button-playpause"]');
-      if (btn) {
-        var label = (btn.getAttribute("aria-label") || btn.title || "").toLowerCase();
-        if (label) setPlaying(label.indexOf("pause") !== -1 || label.indexOf("pausa") !== -1);
-      }
+      if (media) setPlaying(!media.paused && !media.ended);
       var title = q('[data-testid="context-item-info-title"]');
       var artist = q('[data-testid="context-item-info-artist"]');
       var art = q('[data-testid="cover-art-image"] img, [data-testid="now-playing-widget"] img');
@@ -187,6 +254,10 @@
           });
         }
       }
+      var dur = parseTime((q('[data-testid="playback-duration"]') || {}).textContent);
+      if (isFinite(dur) && dur > 0) st.duration = dur;
+      var pos = parseTime((q('[data-testid="playback-position"]') || {}).textContent);
+      if (isFinite(pos)) setPosition(pos);
       var sub = q('[data-testid="context-item-info-ad-subtitle"]');
       setAd(!!sub);
     } catch (e) {
@@ -206,7 +277,7 @@
     on("media_playing", function(p) {
       setPlaying(p);
     });
-    setInterval(pollDomState, 1500);
+    setInterval(pollDomState, 1e3);
     pollDomState();
   }
 
@@ -246,88 +317,95 @@
 
   // src/ui.js
   var CSS = `
-#stv-root { position: fixed; inset: 0; z-index: 2147483000; background: #000; color: #fff;
-  font-family: "Samsung Sans", "Segoe UI", Roboto, Helvetica, Arial, sans-serif; overflow: hidden;
-  -webkit-font-smoothing: antialiased; }
+/* ---------- alleggerimento della pagina di Spotify ---------- */
+html, body { background: #000 !important; }
+#main *, #main *::before, #main *::after { animation-duration: 0s !important; animation-delay: 0s !important;
+  transition-duration: 0s !important; transition-delay: 0s !important; }
+#main * { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+/* barre di Spotify che sulla TV non servono: le sostituiamo con le nostre */
+#Desktop_LeftSidebar_Id, [data-testid="left-sidebar"], .Root__nav-bar,
+.Root__right-sidebar, [data-testid="right-sidebar"],
+[data-testid="topbar-content-wrapper"], .Root__top-bar, #onetrust-consent-sdk { display: none !important; }
+/* della barra in alto di Spotify teniamo solo la ricerca, spostata nella nostra barra */
+#global-nav-bar { visibility: hidden !important; position: relative; z-index: 2147483001 !important; }
+#global-nav-bar form[role="search"] { visibility: visible !important; position: fixed !important; top: 2.4vh; right: 3vw;
+  width: 30vw !important; max-width: none !important; }
+#global-nav-bar form[role="search"] input { font-size: 2.2vmin !important; }
+/* il player di Spotify resta nel DOM (lo comandiamo da l\xEC) ma sotto il nostro */
+[data-testid="now-playing-bar"], .Root__now-playing-bar { opacity: 0 !important; }
+/* testi pi\xF9 grandi: si legge dal divano */
+#main h1 { font-size: 5vmin !important; }
+#main h2 { font-size: 3.4vmin !important; }
+
+/* ---------- interfaccia nostra ---------- */
+#stv-root { position: fixed; inset: 0; z-index: 2147483000; pointer-events: none; color: #fff;
+  font-family: "Samsung Sans", "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
 #stv-root * { box-sizing: border-box; }
-.stv-shell { display: flex; flex-direction: column; height: 100vh; width: 100vw; }
-.stv-top { flex: 0 0 auto; display: flex; align-items: center; gap: 1.4vw; padding: 2vh 3vw 1.2vh;
-  background: linear-gradient(180deg, rgba(0,0,0,.96) 0%, rgba(0,0,0,.72) 70%, rgba(0,0,0,0) 100%); z-index: 3; }
-.stv-brand { padding: .9vh .9vw; border-radius: 10px; transition: background .18s, color .18s; font-weight: 800; letter-spacing: .06em; font-size: 2.6vmin; white-space: nowrap; color: #1ed760; text-transform: uppercase; }
-.stv-menu { display: flex; gap: 1.6vw; }
-.stv-menu-item { padding: .9vh 1.1vw; border-radius: 999px; font-size: 2.5vmin; white-space: nowrap; font-weight: 600; color: #b3b3b3;
-  transition: color .18s, background .18s, transform .18s; }
-.stv-menu-item.stv-focus, .stv-brand.stv-focus { color: #000; background: #fff; transform: scale(1.04); }
-.stv-brand.stv-focus { color: #000; }
-.stv-menu-item.stv-active:not(.stv-focus) { color: #fff; }
+.stv-top, .stv-bottom { pointer-events: auto; position: absolute; left: 0; right: 0; }
 
-.stv-stage { position: relative; flex: 1 1 auto; overflow: hidden; background: #050505; }
-.stv-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0;
-  transition: transform .38s cubic-bezier(.22,.61,.36,1), opacity .38s; opacity: 0; pointer-events: none;
-  will-change: transform; }
-.stv-frame.stv-visible { opacity: 1; pointer-events: auto; }
+.stv-top { top: 0; height: 10vh; display: flex; align-items: center; gap: 1.4vw; padding: 0 3vw;
+  background: linear-gradient(180deg, rgba(0,0,0,.95) 0%, rgba(0,0,0,.75) 65%, rgba(0,0,0,0) 100%); }
+.stv-brand { font-weight: 800; letter-spacing: .08em; font-size: 2.4vmin; color: #1ed760; text-transform: uppercase; margin-right: 1.5vw; }
+.stv-menu { display: flex; gap: 1.2vw; }
+.stv-menu-item { padding: 1vh 1.4vw; border-radius: 999px; font-size: 2.5vmin; font-weight: 700; color: #b3b3b3; white-space: nowrap;
+  transition: color .15s, background .15s, transform .15s; }
+.stv-menu-item.stv-active { color: #fff; }
+.stv-menu-item.stv-focus { color: #000; background: #fff; transform: scale(1.05); }
 
-.stv-hero { position: absolute; inset: 0; padding: 2vh 4vw 20vh; overflow: hidden; z-index: 2;
-  background: radial-gradient(120% 90% at 15% 0%, #1c3a2a 0%, #0a0a0a 55%, #000 100%); }
-.stv-hero-title { font-size: 2.2vmin; letter-spacing: .28em; text-transform: uppercase; color: #9fe6b6; margin: 0 0 1.4vh; }
-.stv-hero-big { font-size: clamp(4vmin, 8.2vmin, 12vmin); font-weight: 800; line-height: 1.02; margin: 0 0 1.6vh; max-width: 62vw;
-  background: linear-gradient(90deg, #fff 0%, #b9f5cd 60%, #1ed760 100%); -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent; }
-.stv-hero-sub { font-size: 2.5vmin; color: #b3b3b3; max-width: 52vw; line-height: 1.45; margin: 0; }
-.stv-tiles { display: flex; gap: 1.6vw; margin-top: 3vh; }
-.stv-tile { width: 20vw; border-radius: 16px; padding: 2.2vh 1.3vw; background: rgba(255,255,255,.06);
-  border: 1px solid rgba(255,255,255,.08); transition: transform .2s, background .2s; }
-.stv-tile.stv-focus { transform: translateY(-6px) scale(1.03); background: rgba(30,215,96,.16); border-color: #1ed760; }
-.stv-tile h3 { margin: 0 0 .6vh; font-size: 2.8vmin; white-space: nowrap; }
-.stv-tile p { margin: 0; font-size: 2vmin; color: #b3b3b3; line-height: 1.35; }
-
-.stv-skeleton { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 2.4vh;
-  padding: 4vh 3.4vw; background: #0a0a0a; z-index: 4; transition: opacity .35s; }
-.stv-skeleton.stv-done { opacity: 0; pointer-events: none; }
-.stv-sk-line { height: 2.6vh; border-radius: 8px; width: 40%;
-  background: linear-gradient(100deg, #1a1a1a 30%, #262626 50%, #1a1a1a 70%); background-size: 300% 100%;
-  animation: stv-shimmer 1.6s infinite linear; }
-.stv-sk-row { display: flex; gap: 1.4vw; }
-.stv-sk-card { width: 15vw; height: 15vw; border-radius: 14px;
-  background: linear-gradient(100deg, #161616 30%, #232323 50%, #161616 70%); background-size: 300% 100%;
-  animation: stv-shimmer 1.6s infinite linear; }
-@keyframes stv-shimmer { from { background-position: 130% 0; } to { background-position: -30% 0; } }
-
-.stv-loadbar { position: absolute; top: 0; left: 0; height: 3px; width: 0%; background: #1ed760;
-  box-shadow: 0 0 12px #1ed760; transition: width .4s ease; z-index: 6; }
-
-.stv-bottom { flex: 0 0 auto; height: 16vh; display: flex; align-items: center; gap: 1.6vw; padding: 0 3vw;
-  background: linear-gradient(0deg, #000 20%, #0b0b0b 100%); border-top: 1px solid rgba(255,255,255,.07);
-  transition: transform .3s, opacity .3s; }
-.stv-bottom.stv-hidden { transform: translateY(100%); opacity: 0; }
-.stv-art { width: 10vh; height: 10vh; border-radius: 10px; background: #1a1a1a center/cover no-repeat; flex: 0 0 auto;
-  box-shadow: 0 6px 20px rgba(0,0,0,.6); transition: transform .25s; }
+.stv-bottom { bottom: 0; height: 15vh; display: flex; align-items: center; gap: 1.6vw; padding: 0 3vw;
+  background: linear-gradient(0deg, #000 30%, rgba(8,8,8,.97) 100%); border-top: 1px solid rgba(255,255,255,.08); }
+.stv-art { width: 10vh; height: 10vh; border-radius: 8px; background: #1a1a1a center/cover no-repeat; flex: 0 0 auto;
+  box-shadow: 0 6px 20px rgba(0,0,0,.6); }
 .stv-art.stv-pulse { animation: stv-pulse 2.6s infinite ease-in-out; }
-@keyframes stv-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.035); } }
-.stv-meta { min-width: 0; flex: 1 1 auto; max-width: 46vw; }
+@keyframes stv-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+.stv-meta { min-width: 0; flex: 1 1 auto; }
 .stv-meta h2 { margin: 0; font-size: 3vmin; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .stv-meta p { margin: .5vh 0 0; font-size: 2.3vmin; color: #b3b3b3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stv-tag { display: inline-block; margin-left: .8vw; padding: .2vh .6vw; border-radius: 6px; font-size: 1.8vmin;
+  background: #ffd24d; color: #000; font-weight: 700; vertical-align: middle; }
 .stv-progress { display: flex; align-items: center; gap: .8vw; margin-top: 1.2vh; font-size: 2vmin; color: #b3b3b3; }
-.stv-bar { flex: 1 1 auto; min-width: 8vw; height: 5px; border-radius: 999px; background: rgba(255,255,255,.18); overflow: hidden; }
-.stv-bar > i { display: block; height: 100%; width: 0%; background: #1ed760; border-radius: 999px; transition: width .4s linear; }
-.stv-controls { display: flex; align-items: center; gap: .7vw; flex: 0 0 auto; margin-left: auto; }
-.stv-btn { width: 7vmin; height: 7vmin; border-radius: 50%; display: grid; place-items: center; flex: 0 0 auto; font-size: 3vmin; font-weight: 700;
-  background: rgba(255,255,255,.07); transition: background .18s, transform .18s; }
+.stv-bar { flex: 1 1 auto; height: 5px; border-radius: 999px; background: rgba(255,255,255,.18); overflow: hidden; }
+.stv-bar > i { display: block; height: 100%; width: 0%; background: #1ed760; transition: width .5s linear; }
+.stv-controls { display: flex; align-items: center; gap: .8vw; flex: 0 0 auto; }
+.stv-btn { width: 7vmin; height: 7vmin; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.08);
+  transition: background .15s, transform .15s; }
 .stv-btn svg { width: 3.4vmin; height: 3.4vmin; fill: #fff; }
-.stv-btn.stv-play { width: 9.6vmin; height: 9.6vmin; background: #fff; }
+.stv-btn.stv-play { width: 9.4vmin; height: 9.4vmin; background: #fff; }
 .stv-btn.stv-play svg { fill: #000; width: 4.2vmin; height: 4.2vmin; }
-.stv-btn.stv-focus { background: #1ed760; transform: scale(1.09); color: #000; }
-.stv-btn.stv-vol { background: rgba(255,255,255,.04); color: #ddd; }
+.stv-btn.stv-focus { background: #1ed760; transform: scale(1.1); }
 .stv-btn.stv-focus svg { fill: #000; }
-.stv-badge { position: absolute; right: 3vw; top: 3vh; font-size: 2vmin; padding: .6vh 1vw; border-radius: 999px;
-  background: rgba(30,215,96,.16); color: #1ed760; border: 1px solid rgba(30,215,96,.4); z-index: 5; }
-.stv-toast { position: absolute; left: 50%; bottom: 19vh; transform: translateX(-50%) translateY(10px);
-  background: rgba(20,20,20,.96); border: 1px solid rgba(255,255,255,.14); color: #fff; padding: 1.2vh 2vw;
-  border-radius: 999px; font-size: 2.2vmin; opacity: 0; transition: opacity .25s, transform .25s; z-index: 20; }
+
+.stv-ring { position: absolute; display: none; pointer-events: none; border: 4px solid #1ed760; border-radius: 12px;
+  box-shadow: 0 0 0 3px rgba(0,0,0,.6), 0 0 26px rgba(30,215,96,.6);
+  transition: left .14s ease-out, top .14s ease-out, width .14s ease-out, height .14s ease-out; }
+
+.stv-toast { position: absolute; left: 50%; bottom: 18vh; transform: translateX(-50%) translateY(10px); opacity: 0;
+  background: rgba(24,24,24,.97); border: 1px solid rgba(255,255,255,.14); padding: 1.2vh 2vw; border-radius: 999px;
+  font-size: 2.2vmin; transition: opacity .2s, transform .2s; }
 .stv-toast.stv-show { opacity: 1; transform: translateX(-50%) translateY(0); }
-.stv-focus-ring { position: absolute; pointer-events: none; border: 3px solid #1ed760; border-radius: 12px;
-  box-shadow: 0 0 0 2px rgba(0,0,0,.55), 0 0 26px rgba(30,215,96,.55); transition: all .18s cubic-bezier(.22,.61,.36,1);
-  z-index: 15; display: none; }
+
+/* ---------- schermata di avvio ---------- */
+.stv-splash { position: absolute; inset: 0; pointer-events: none; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 4vh; background: radial-gradient(110% 80% at 50% 30%, #12301f 0%, #050505 60%, #000 100%);
+  transition: opacity .5s; }
+.stv-splash.stv-gone { opacity: 0; pointer-events: none; }
+.stv-eq { display: flex; align-items: flex-end; gap: 1.2vmin; height: 12vmin; }
+.stv-eq i { display: block; width: 2.2vmin; height: 100%; border-radius: 1vmin; background: #1ed760; transform-origin: bottom;
+  animation: stv-eq 1s infinite ease-in-out; }
+.stv-eq i:nth-child(2) { animation-delay: -.25s; } .stv-eq i:nth-child(3) { animation-delay: -.5s; }
+.stv-eq i:nth-child(4) { animation-delay: -.75s; } .stv-eq i:nth-child(5) { animation-delay: -.4s; }
+@keyframes stv-eq { 0%,100% { transform: scaleY(.25); } 50% { transform: scaleY(1); } }
+.stv-splash h1 { margin: 0; font-size: 5vmin; font-weight: 800; }
+.stv-splash p { margin: 0; font-size: 2.4vmin; color: #9a9a9a; }
+.stv-load { width: 26vw; height: 4px; border-radius: 999px; background: rgba(255,255,255,.12); overflow: hidden; }
+.stv-load i { display: block; height: 100%; width: 0%; background: #1ed760; transition: width .6s ease-out; }
+
+/* velo durante il cambio pagina: copre il "salto" della pagina di Spotify */
+.stv-veil { position: absolute; left: 0; right: 0; top: 10vh; bottom: 15vh; pointer-events: none; opacity: 0;
+  background: #000; transition: opacity .18s; display: flex; align-items: center; justify-content: center; }
+.stv-veil.stv-on { opacity: .85; }
+.stv-veil .stv-eq { height: 7vmin; }
+.stv-veil .stv-eq i { width: 1.4vmin; }
 `;
   var PLAY = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
   var PAUSE = '<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>';
@@ -335,11 +413,13 @@
   var NEXT = '<svg viewBox="0 0 24 24"><path d="M15 6h2v12h-2zM4 6l9 6-9 6z"/></svg>';
   var RW = '<svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/></svg>';
   var FF = '<svg viewBox="0 0 24 24"><path d="M12 5V1l5 5-5 5V7a6 6 0 1 0 6 6h2a8 8 0 1 1-8-8z"/></svg>';
+  var EQ = '<div class="stv-eq"><i></i><i></i><i></i><i></i><i></i></div>';
   var VIEWS = [
-    { id: "home", label: "Home", path: "/", hero: true },
+    { id: "home", label: "Home", path: "/" },
     { id: "search", label: "Cerca", path: "/search" },
-    { id: "library", label: "La tua raccolta", path: "/collection" }
+    { id: "library", label: "Brani che ti piacciono", path: "/collection/tracks" }
   ];
+  var TARGETS = 'a[href], button:not([disabled]), input, [role="button"], [role="link"], [role="row"], [role="tab"], [role="option"]';
   function el(tag, cls, html) {
     var e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -352,41 +432,31 @@
     return m + ":" + (s < 10 ? "0" : "") + s;
   }
   function SpotifyUI() {
-    this.zones = [];
-    this.zoneIndex = 0;
-    this.itemIndex = 0;
-    this.views = {};
+    this.zone = "menu";
+    this.menuIndex = 0;
+    this.playerIndex = 2;
+    this.contentEl = null;
     this.current = "home";
-    this.frameMounted = false;
-    this.frameReady = {};
-    this.ring = null;
-    this.booted = false;
+    this.visible = false;
+    this.mounted = false;
   }
   SpotifyUI.prototype.mount = function() {
-    var self0 = this;
-    function step(name, fn) {
-      try {
-        fn();
-      } catch (e) {
-        self0.mountErrors = self0.mountErrors || [];
-        self0.mountErrors.push(name + ": " + e.message);
-        if (window.console) console.warn("[spotify-tv] mount " + name, e);
-      }
-    }
+    var self = this;
     var style = el("style");
+    style.id = "stv-style";
     style.textContent = CSS;
-    document.head.appendChild(style);
+    (document.head || document.documentElement).appendChild(style);
     var root = el("div");
     root.id = "stv-root";
-    root.innerHTML = '<div class="stv-shell">  <div class="stv-top"><div class="stv-brand">Spotify</div><div class="stv-menu"></div></div>  <div class="stv-stage">    <div class="stv-loadbar"></div>  </div>  <div class="stv-bottom">    <div class="stv-art"></div>    <div class="stv-meta"><h2>\u2014</h2><p>Premi OK su un brano</p>      <div class="stv-progress"><span class="stv-time">0:00</span><div class="stv-bar"><i></i></div><span class="stv-dur">0:00</span></div>    </div>    <div class="stv-controls">      <div class="stv-btn stv-vol" data-cmd="vol-down">\u2013</div>      <div class="stv-btn stv-vol" data-cmd="vol-up">+</div>      <div class="stv-btn" data-cmd="rw">' + RW + '</div>      <div class="stv-btn" data-cmd="prev">' + PREV + '</div>      <div class="stv-btn stv-play" data-cmd="play">' + PLAY + '</div>      <div class="stv-btn" data-cmd="next">' + NEXT + '</div>      <div class="stv-btn" data-cmd="ff">' + FF + '</div>    </div>  </div></div><div class="stv-toast"></div><div class="stv-focus-ring"></div>';
-    document.documentElement.appendChild(root);
+    root.innerHTML = '<div class="stv-top"><div class="stv-brand">Spotify TV</div><div class="stv-menu"></div></div><div class="stv-veil">' + EQ + '</div><div class="stv-bottom">  <div class="stv-art"></div>  <div class="stv-meta"><h2>Nessun brano</h2><p>Scegli qualcosa da ascoltare</p>    <div class="stv-progress"><span class="stv-time">0:00</span><div class="stv-bar"><i></i></div><span class="stv-dur">0:00</span></div>  </div>  <div class="stv-controls">    <div class="stv-btn" data-cmd="rw">' + RW + '</div>    <div class="stv-btn" data-cmd="prev">' + PREV + '</div>    <div class="stv-btn stv-play" data-cmd="play">' + PLAY + '</div>    <div class="stv-btn" data-cmd="next">' + NEXT + '</div>    <div class="stv-btn" data-cmd="ff">' + FF + '</div>  </div></div><div class="stv-ring"></div><div class="stv-toast"></div><div class="stv-splash">' + EQ + '<h1>Spotify TV</h1><p class="stv-splash-msg">Avvio del player\u2026</p>  <div class="stv-load"><i></i></div></div>';
+    document.body.appendChild(root);
     this.root = root;
-    this.stage = root.querySelector(".stv-stage");
-    this.menu = root.querySelector(".stv-menu");
-    this.ring = root.querySelector(".stv-focus-ring");
-    this.loadbar = root.querySelector(".stv-loadbar");
+    this.ring = root.querySelector(".stv-ring");
     this.toastEl = root.querySelector(".stv-toast");
-    this.bottom = root.querySelector(".stv-bottom");
+    this.veil = root.querySelector(".stv-veil");
+    this.splash = root.querySelector(".stv-splash");
+    this.splashMsg = root.querySelector(".stv-splash-msg");
+    this.splashBar = root.querySelector(".stv-load i");
     this.art = root.querySelector(".stv-art");
     this.title = root.querySelector(".stv-meta h2");
     this.sub = root.querySelector(".stv-meta p");
@@ -394,325 +464,349 @@
     this.durEl = root.querySelector(".stv-dur");
     this.fill = root.querySelector(".stv-bar > i");
     this.playBtn = root.querySelector('[data-cmd="play"]');
-    this.badge = el("div", "stv-badge");
-    this.badge.style.display = "none";
-    root.appendChild(this.badge);
-    var self = this;
-    if (this.playBtn) this.playBtn.addEventListener("click", function() {
-      commands.togglePlay();
-    });
-    var cmdEls = root.querySelectorAll("[data-cmd]") || [];
-    Array.prototype.forEach.call(cmdEls, function(b) {
-      b.addEventListener("click", function() {
-        var c = b.getAttribute("data-cmd");
-        if (c === "next") commands.next();
-        if (c === "prev") commands.prev();
-        if (c === "rw") commands.seek(-10);
-        if (c === "ff") commands.seek(10);
-        if (c === "vol-up") commands.volume(0.1);
-        if (c === "vol-down") commands.volume(-0.1);
-      });
-    });
-    step("menu", function() {
-      self.buildMenu();
-    });
-    step("hero", function() {
-      self.buildHero();
-    });
-    step("player", function() {
-      self.buildPlayerZone();
-    });
-    step("stato", function() {
-      self.bindState();
-    });
-    step("focus", function() {
-      self.focus(0, 0);
-    });
-    step("mostra", function() {
-      self.show();
-    });
-    this.mounted = true;
-    setTimeout(function() {
-      self.markLoaded();
-    }, 400);
-  };
-  SpotifyUI.prototype.buildMenu = function() {
-    var self = this;
-    var brand = this.root.querySelector(".stv-brand");
-    if (brand) {
-      brand.setAttribute("data-view", "home");
-      brand.addEventListener("click", function() {
-        self.openView("home");
-      });
-    }
-    this.brand = brand;
+    this.playerEls = Array.prototype.slice.call(root.querySelectorAll(".stv-btn"));
+    var menu = root.querySelector(".stv-menu");
     this.menuItems = VIEWS.map(function(v) {
       var it = el("div", "stv-menu-item", v.label);
       it.setAttribute("data-view", v.id);
-      it.addEventListener("click", function() {
-        self.openView(v.id);
-      });
-      self.menu.appendChild(it);
+      menu.appendChild(it);
       return it;
     });
+    this.loginItem = el("div", "stv-menu-item", "Accedi");
+    this.loginItem.setAttribute("data-view", "login");
+    this.loginItem.style.display = "none";
+    menu.appendChild(this.loginItem);
+    this.bindState();
+    this.markActive();
+    this.show();
+    this.mounted = true;
+    this.waitForSpotify();
+    (function follow() {
+      self.drawRing();
+      requestAnimationFrame(follow);
+    })();
   };
-  SpotifyUI.prototype.buildHero = function() {
+  SpotifyUI.prototype.waitForSpotify = function() {
     var self = this;
-    var hero = el("div", "stv-hero");
-    hero.innerHTML = '<p class="stv-hero-title">Spotify sulla TV</p><h1 class="stv-hero-big">La tua musica,<br>sul grande schermo.</h1><p class="stv-hero-sub">Usa le frecce per muoverti, OK per scegliere. I tasti play/pausa e traccia del telecomando funzionano sempre.</p><div class="stv-tiles">  <div class="stv-tile" data-view="home"><h3>Home</h3><p>I tuoi ascolti e i consigli di Spotify</p></div>  <div class="stv-tile" data-view="search"><h3>Cerca</h3><p>Brani, artisti, album, playlist</p></div>  <div class="stv-tile" data-view="library"><h3>La tua raccolta</h3><p>Playlist e brani salvati</p></div></div>';
-    var heroTiles = hero.querySelectorAll("[data-view]") || [];
-    Array.prototype.forEach.call(heroTiles, function(t) {
-      t.addEventListener("click", function() {
-        self.openView(t.getAttribute("data-view"));
-      });
-    });
-    this.hero = hero;
-    this.stage.appendChild(hero);
-  };
-  SpotifyUI.prototype.buildPlayerZone = function() {
-    this.playerEls = Array.prototype.slice.call(this.bottom ? this.bottom.querySelectorAll(".stv-btn") : []);
-    (this.playerEls || []).forEach(function(b, i) {
-      b.setAttribute("tabindex", "0");
-      b.__zone = "player";
-    });
+    var start = Date.now();
+    var timer = setInterval(function() {
+      var elapsed = Date.now() - start;
+      self.splashBar.style.width = Math.min(92, 10 + elapsed / 250) + "%";
+      var items = self.contentTargets().length;
+      var loggedOut = !!document.querySelector('[data-testid="login-button"]');
+      if (elapsed > 5e3) self.splashMsg.textContent = "Spotify \xE8 un po' lento sulla TV, ancora un attimo\u2026";
+      if (items > 6 || elapsed > 3e4) {
+        clearInterval(timer);
+        self.splashBar.style.width = "100%";
+        self.loginItem.style.display = loggedOut ? "" : "none";
+        setTimeout(function() {
+          self.splash.classList.add("stv-gone");
+          self.focusContentStart();
+          if (loggedOut) self.toast("Non hai fatto l'accesso: vai su \xABAccedi\xBB in alto");
+        }, 350);
+      }
+    }, 250);
   };
   SpotifyUI.prototype.bindState = function() {
     var self = this;
     on("track", function(t) {
-      self.title.textContent = t && t.name ? t.name : "\u2014";
-      self.sub.textContent = t && t.artists ? t.artists : "Premi OK su un brano";
-      if (t && t.art) {
-        self.art.style.backgroundImage = 'url("' + t.art + '")';
-        self.art.classList.add("stv-pulse");
-      } else {
-        self.art.style.backgroundImage = "";
-        self.art.classList.remove("stv-pulse");
-      }
-      if (t && t.duration) self.durEl.textContent = fmt(t.duration);
+      self.title.textContent = t && t.name ? t.name : "Nessun brano";
+      self.sub.textContent = t && t.artists ? t.artists : "Scegli qualcosa da ascoltare";
+      self.art.style.backgroundImage = t && t.art ? 'url("' + t.art + '")' : "";
+      if (st.ad) self.title.appendChild(el("span", "stv-tag", "Pubblicit\xE0"));
     });
     on("playing", function(p) {
       self.playBtn.innerHTML = p ? PAUSE : PLAY;
       self.art.classList.toggle("stv-pulse", !!p);
     });
     on("position", function(pos) {
-      self.timeEl.textContent = fmt(pos);
       var d = st.duration || 0;
+      self.timeEl.textContent = fmt(pos);
+      self.durEl.textContent = fmt(d);
       self.fill.style.width = d > 0 ? Math.min(100, pos / d * 100) + "%" : "0%";
     });
     on("ad", function(isAd) {
-      self.badge.style.display = isAd ? "block" : "none";
-      self.badge.textContent = "Pubblicit\xE0 in corso\u2026";
-    });
-    on("progress", function(p) {
-      self.loadbar.style.width = Math.round(p * 100) + "%";
-      if (p >= 1) setTimeout(function() {
-        self.loadbar.style.opacity = "0";
-      }, 600);
+      var tag = self.title.querySelector(".stv-tag");
+      if (isAd && !tag) self.title.appendChild(el("span", "stv-tag", "Pubblicit\xE0"));
+      if (!isAd && tag) tag.parentNode.removeChild(tag);
     });
   };
-  SpotifyUI.prototype.frameFor = function(view) {
-    var self = this;
-    if (this.views[view.id]) return this.views[view.id];
-    var frame = el("iframe", "stv-frame");
-    frame.setAttribute("allow", "autoplay; encrypted-media; fullscreen");
-    frame.__view = view.id;
-    this.stage.appendChild(frame);
-    this.views[view.id] = frame;
-    frame.addEventListener("load", function() {
-      self.frameReady[view.id] = true;
-      if (self.pendingView === view.id) self.markLoaded();
-      try {
-        var doc = frame.contentDocument;
-        if (doc && doc.documentElement) doc.documentElement.classList.add("stv-embedded");
-      } catch (e) {
+  SpotifyUI.prototype.mainEl = function() {
+    return document.querySelector("main") || document.querySelector(".Root__main-view") || document.querySelector('[data-testid="main-view"]');
+  };
+  function visibleRect(e) {
+    var r = e.getBoundingClientRect();
+    if (r.width < 12 || r.height < 12) return null;
+    if (r.bottom < innerHeight * 0.1 || r.top > innerHeight * 0.85 || r.right < 0 || r.left > innerWidth) return null;
+    return r;
+  }
+  function reachable(e, r) {
+    var x = Math.min(Math.max(r.left + r.width / 2, 1), innerWidth - 1);
+    var y = Math.min(Math.max(r.top + r.height / 2, innerHeight * 0.11), innerHeight * 0.84);
+    var hit = document.elementFromPoint(x, y);
+    return !!hit && (hit === e || e.contains(hit) || hit.contains(e));
+  }
+  SpotifyUI.prototype.contentTargets = function() {
+    var main = this.mainEl();
+    if (!main) return [];
+    var els = main.querySelectorAll(TARGETS);
+    var list = [];
+    for (var i = 0; i < els.length; i++) {
+      var e = els[i];
+      if (e.closest('footer, [data-testid="footer-div"]')) continue;
+      var r = visibleRect(e);
+      if (r && reachable(e, r)) list.push({ el: e, r });
+    }
+    return list.filter(function(a) {
+      for (var j = 0; j < list.length; j++) {
+        if (list[j] !== a && list[j].el.contains(a.el)) return false;
+      }
+      return true;
+    });
+  };
+  function center(r) {
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }
+  function pick(list, from, dir) {
+    var c = center(from), best = null, bestScore = Infinity;
+    list.forEach(function(it) {
+      var p = center(it.r), dx = p.x - c.x, dy = p.y - c.y, primary, ortho;
+      if (dir === "left") {
+        if (it.r.right > from.left + 4) return;
+        primary = -dx;
+        ortho = Math.abs(dy);
+      }
+      if (dir === "right") {
+        if (it.r.left < from.right - 4) return;
+        primary = dx;
+        ortho = Math.abs(dy);
+      }
+      if (dir === "up") {
+        if (it.r.bottom > from.top + 4) return;
+        primary = -dy;
+        ortho = Math.abs(dx);
+      }
+      if (dir === "down") {
+        if (it.r.top < from.bottom - 4) return;
+        primary = dy;
+        ortho = Math.abs(dx);
+      }
+      var score = primary + ortho * 2.5;
+      if (score < bestScore) {
+        bestScore = score;
+        best = it;
       }
     });
-    frame.src = this.current === "home" && !this.frameMounted ? location.href : location.origin + view.path;
-    this.frameMounted = true;
-    return frame;
-  };
-  SpotifyUI.prototype.showSkeleton = function() {
-    var self = this;
-    if (!this.skeleton) {
-      this.skeleton = el("div", "stv-skeleton");
-      this.skeleton.innerHTML = '<div class="stv-sk-line" style="width:26%"></div><div class="stv-sk-line" style="width:52%;height:5vh"></div><div class="stv-sk-row"><div class="stv-sk-card"></div><div class="stv-sk-card"></div><div class="stv-sk-card"></div><div class="stv-sk-card"></div></div><div class="stv-sk-row"><div class="stv-sk-card" style="width:10vw;height:10vw;border-radius:50%"></div><div class="stv-sk-card" style="width:10vw;height:10vw;border-radius:50%"></div><div class="stv-sk-card" style="width:10vw;height:10vw;border-radius:50%"></div></div>';
-      this.stage.appendChild(this.skeleton);
+    return best;
+  }
+  function scrollerOf(e, horizontal) {
+    var node = e.parentElement;
+    while (node && node !== document.documentElement) {
+      var cs = getComputedStyle(node);
+      if (horizontal) {
+        if (/(auto|scroll)/.test(cs.overflowX) && node.scrollWidth > node.clientWidth + 4) return node;
+      } else if (/(auto|scroll)/.test(cs.overflowY) && node.scrollHeight > node.clientHeight + 4) return node;
+      node = node.parentElement;
     }
-    this.skeleton.classList.remove("stv-done");
-    this.skeleton.style.display = "flex";
-    var p = 0;
-    var self2 = this;
-    clearInterval(this._skTimer);
-    this._skTimer = setInterval(function() {
-      p = Math.min(0.9, p + 0.07);
-      emit("progress", p);
-      if (self2.skeleton.classList.contains("stv-done")) clearInterval(self2._skTimer);
-    }, 260);
+    return null;
+  }
+  SpotifyUI.prototype.focusContentStart = function() {
+    var list = this.contentTargets();
+    if (!list.length) {
+      this.setZone("menu");
+      return;
+    }
+    list.sort(function(a, b) {
+      return a.r.top - b.r.top || a.r.left - b.r.left;
+    });
+    this.setContent(list[0].el);
   };
-  SpotifyUI.prototype.markLoaded = function() {
-    if (this.skeleton) this.skeleton.classList.add("stv-done");
-    emit("progress", 1);
+  SpotifyUI.prototype.setContent = function(e) {
+    this.zone = "content";
+    this.contentEl = e;
+    var r = e.getBoundingClientRect();
+    if (r.top < innerHeight * 0.14 || r.bottom > innerHeight * 0.8) {
+      var sc = scrollerOf(e, false);
+      if (sc) sc.scrollBy({ top: r.top + r.height / 2 - innerHeight * 0.47, behavior: "smooth" });
+      else e.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+    if (r.left < 0 || r.right > innerWidth) e.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+    this.paintFocus();
+  };
+  SpotifyUI.prototype.setZone = function(zone) {
+    this.zone = zone;
+    this.paintFocus();
+  };
+  SpotifyUI.prototype.menuList = function() {
+    var items = this.menuItems.slice();
+    if (this.loginItem.style.display !== "none") items.push(this.loginItem);
+    return items;
+  };
+  SpotifyUI.prototype.paintFocus = function() {
+    this.menuItems.concat([this.loginItem]).forEach(function(m) {
+      m.classList.remove("stv-focus");
+    });
+    this.playerEls.forEach(function(b) {
+      b.classList.remove("stv-focus");
+    });
+    if (this.zone === "menu") {
+      var items = this.menuList();
+      this.menuIndex = Math.min(this.menuIndex, items.length - 1);
+      items[this.menuIndex].classList.add("stv-focus");
+    }
+    if (this.zone === "player") this.playerEls[this.playerIndex].classList.add("stv-focus");
+    this.drawRing();
+  };
+  SpotifyUI.prototype.drawRing = function() {
+    if (!this.ring) return;
+    var e = this.zone === "content" ? this.contentEl : null;
+    if (!e || !document.contains(e) || !this.visible) {
+      this.ring.style.display = "none";
+      return;
+    }
+    var r = e.getBoundingClientRect();
+    this.ring.style.display = "block";
+    this.ring.style.left = r.left - 6 + "px";
+    this.ring.style.top = r.top - 6 + "px";
+    this.ring.style.width = r.width + 12 + "px";
+    this.ring.style.height = r.height + 12 + "px";
+  };
+  SpotifyUI.prototype.move = function(dir) {
+    var self = this;
+    if (this.zone === "menu") {
+      var items = this.menuList();
+      if (dir === "left") this.menuIndex = Math.max(0, this.menuIndex - 1);
+      if (dir === "right") this.menuIndex = Math.min(items.length - 1, this.menuIndex + 1);
+      if (dir === "down") {
+        this.focusContentStart();
+        return;
+      }
+      this.paintFocus();
+      return;
+    }
+    if (this.zone === "player") {
+      if (dir === "left") this.playerIndex = Math.max(0, this.playerIndex - 1);
+      if (dir === "right") this.playerIndex = Math.min(this.playerEls.length - 1, this.playerIndex + 1);
+      if (dir === "up") {
+        if (this.contentEl && document.contains(this.contentEl) && visibleRect(this.contentEl)) this.setContent(this.contentEl);
+        else this.focusContentStart();
+        return;
+      }
+      this.paintFocus();
+      return;
+    }
+    var cur = this.contentEl;
+    if (!cur || !document.contains(cur)) {
+      this.focusContentStart();
+      return;
+    }
+    var others = function() {
+      return self.contentTargets().filter(function(it) {
+        return it.el !== cur;
+      });
+    };
+    var best = pick(others(), cur.getBoundingClientRect(), dir);
+    if (best) {
+      this.setContent(best.el);
+      return;
+    }
+    var horizontal = dir === "left" || dir === "right";
+    var sc = scrollerOf(cur, horizontal);
+    var before = sc ? horizontal ? sc.scrollLeft : sc.scrollTop : 0;
+    if (sc) {
+      var step = (dir === "right" || dir === "down" ? 1 : -1) * (horizontal ? innerWidth * 0.5 : innerHeight * 0.45);
+      sc.scrollBy(horizontal ? { left: step, behavior: "smooth" } : { top: step, behavior: "smooth" });
+    }
+    setTimeout(function() {
+      var moved = sc && Math.abs((horizontal ? sc.scrollLeft : sc.scrollTop) - before) > 4;
+      var again = pick(others(), cur.getBoundingClientRect(), dir);
+      if (again) {
+        self.setContent(again.el);
+        return;
+      }
+      if (!moved && !horizontal) {
+        self.setZone(dir === "up" ? "menu" : "player");
+      }
+    }, 420);
+  };
+  SpotifyUI.prototype.activate = function() {
+    if (this.zone === "menu") {
+      var v = this.menuList()[this.menuIndex].getAttribute("data-view");
+      if (v === "login") {
+        login();
+        return;
+      }
+      this.openView(v);
+      return;
+    }
+    if (this.zone === "player") {
+      var cmd = this.playerEls[this.playerIndex].getAttribute("data-cmd");
+      if (cmd === "play") commands.togglePlay();
+      if (cmd === "next") commands.next();
+      if (cmd === "prev") commands.prev();
+      if (cmd === "rw") commands.seek(-10);
+      if (cmd === "ff") commands.seek(10);
+      return;
+    }
+    var e = this.contentEl;
+    if (!e || !document.contains(e)) return;
+    var path = location.pathname;
+    activate(e);
+    var self = this;
+    setTimeout(function() {
+      if (location.pathname !== path) self.afterNavigation();
+    }, 150);
   };
   SpotifyUI.prototype.openView = function(id) {
     var view = null;
     for (var i = 0; i < VIEWS.length; i++) if (VIEWS[i].id === id) view = VIEWS[i];
     if (!view) return;
-    var firstFrame = !this.frameMounted;
-    if (this.current === id && !firstFrame) return;
     this.current = id;
-    this.pendingView = id;
-    var frame = this.frameFor(view);
-    if (this.frameReady[id]) this.markLoaded();
-    else this.showSkeleton();
-    Object.keys(this.views).forEach(function(k) {
-      this.views[k].classList.toggle("stv-visible", k === id);
-    }, this);
-    this.hero.style.display = id === "home" && !this.frameMounted ? "block" : "none";
-    (this.menuItems || []).forEach(function(it) {
-      it.classList.toggle("stv-active", it.getAttribute("data-view") === id);
-    });
-    this.focus(1, 0);
-    this.toast(view.label);
+    this.markActive();
+    navigate(view.path);
+    this.afterNavigation(id === "search");
   };
-  SpotifyUI.prototype.zonesOf = function() {
-    var z = [];
-    z.push((this.brand ? [{ el: this.brand }] : []).concat((this.menuItems || []).map(function(m) {
-      return { el: m };
-    })));
-    if (!this.frameMounted && this.current === "home" && this.hero.style.display !== "none") {
-      z.push(Array.prototype.slice.call(this.hero.querySelectorAll(".stv-tile")).map(function(t) {
-        return { el: t };
-      }));
-    } else if (this.current) {
-      var frame = this.views[this.current];
-      var items = [];
-      if (frame && this.frameReady[this.current]) {
-        try {
-          items = this.itemsInFrame(frame);
-        } catch (e) {
-          items = [];
+  SpotifyUI.prototype.afterNavigation = function(isSearch) {
+    var self = this;
+    this.veil.classList.add("stv-on");
+    this.contentEl = null;
+    var start = Date.now();
+    clearInterval(this._navTimer);
+    this._navTimer = setInterval(function() {
+      if (self.contentTargets().length > 3 || Date.now() - start > 6e3) {
+        clearInterval(self._navTimer);
+        self.veil.classList.remove("stv-on");
+        var input = isSearch && document.querySelector('input[data-testid="search-input"], main input, input[role="searchbox"]');
+        if (input) {
+          self.setContent(input);
+          return;
         }
+        self.focusContentStart();
       }
-      z.push(items.length ? items : [{ el: frame }]);
-    }
-    z.push(this.playerEls.map(function(b) {
-      return { el: b };
-    }));
-    return z;
+    }, 200);
   };
-  SpotifyUI.prototype.playerZone = function() {
-    return this.zonesOf().length - 1;
+  SpotifyUI.prototype.markActive = function() {
+    var cur = this.current;
+    this.menuItems.forEach(function(m) {
+      m.classList.toggle("stv-active", m.getAttribute("data-view") === cur);
+    });
   };
-  SpotifyUI.prototype.itemsInFrame = function(frame) {
-    var doc = frame.contentDocument;
-    if (!doc) return [];
-    var els = doc.querySelectorAll('[data-testid="card-click-handler"], [data-testid="tracklist-row"], a[href^="/album"], a[href^="/playlist"], a[href^="/artist"], [role="row"], [role="button"]');
-    var out = [];
-    var seen = {};
-    for (var i = 0; i < els.length && out.length < 120; i++) {
-      var e = els[i];
-      if (seen[e]) continue;
-      seen[e] = 1;
-      out.push({ el: e, frame, doc });
-    }
-    return out;
-  };
-  SpotifyUI.prototype.focus = function(zone, index) {
-    var zones = this.zonesOf();
-    if (!zones.length) return;
-    zone = Math.max(0, Math.min(zones.length - 1, zone));
-    var list = zones[zone] || [];
-    if (!list.length) {
-      this.hideRing();
+  SpotifyUI.prototype.back = function() {
+    var e = this.contentEl;
+    if (this.zone === "content" && e && /^(INPUT|TEXTAREA)$/.test(e.tagName) && document.activeElement === e) {
+      e.blur();
       return;
     }
-    index = Math.max(0, Math.min(list.length - 1, index));
-    this.zoneIndex = zone;
-    this.itemIndex = index;
-    if (this.focusedEl) this.focusedEl.classList.remove("stv-focus");
-    var item = list[index];
-    var e = item.el;
-    this.focusedEl = e;
-    if (e.classList) e.classList.add("stv-focus");
-    if (item.frame) {
-      try {
-        e.scrollIntoView({ block: "center", behavior: "smooth" });
-        var r = e.getBoundingClientRect();
-        this.drawRing(r.left, r.top, r.width, r.height);
-      } catch (err) {
-        this.hideRing();
-      }
-    } else {
-      var r2 = e.getBoundingClientRect();
-      this.drawRing(r2.left, r2.top, r2.width, r2.height);
-    }
-  };
-  SpotifyUI.prototype.drawRing = function(x, y, w, h) {
-    if (!this.ring) return;
-    this.ring.style.display = "block";
-    this.ring.style.left = x - 6 + "px";
-    this.ring.style.top = y - 6 + "px";
-    this.ring.style.width = w + 12 + "px";
-    this.ring.style.height = h + 12 + "px";
-  };
-  SpotifyUI.prototype.hideRing = function() {
-    if (this.ring) this.ring.style.display = "none";
-  };
-  SpotifyUI.prototype.move = function(dir) {
-    var zones = this.zonesOf();
-    if (dir === "up") {
-      if (this.zoneIndex > 0) this.focus(this.zoneIndex - 1, 0);
-      else this.toast("Sei in cima");
+    if (location.pathname !== "/") {
+      history.back();
+      this.afterNavigation();
       return;
     }
-    if (dir === "down") {
-      if (this.zoneIndex < zones.length - 1) this.focus(this.zoneIndex + 1, 0);
-      else this.toast("Sei in fondo");
+    if (this.zone !== "menu") {
+      this.setZone("menu");
       return;
     }
-    var delta = dir === "left" ? -1 : 1;
-    var list = zones[this.zoneIndex] || [];
-    var next2 = this.itemIndex + delta;
-    if (next2 < 0 || next2 >= list.length) {
-      this.scrollStage(delta);
-      return;
-    }
-    this.focus(this.zoneIndex, next2);
-  };
-  SpotifyUI.prototype.scrollStage = function(dir) {
-    var frame = this.current && this.views[this.current];
-    if (!frame) return;
-    try {
-      frame.contentWindow.scrollBy({ top: dir * 420, behavior: "smooth" });
-    } catch (e) {
-    }
-  };
-  SpotifyUI.prototype.activate = function() {
-    var zones = this.zonesOf();
-    var item = (zones[this.zoneIndex] || [])[this.itemIndex];
-    if (!item) return;
-    if (item.frame) {
-      try {
-        var e = item.el;
-        var r = e.getBoundingClientRect();
-        var opts = { bubbles: true, cancelable: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
-        e.dispatchEvent(new item.doc.defaultView.MouseEvent("mousedown", opts));
-        e.dispatchEvent(new item.doc.defaultView.MouseEvent("mouseup", opts));
-        e.dispatchEvent(new item.doc.defaultView.MouseEvent("click", opts));
-      } catch (err) {
-      }
-      return;
-    }
-    var view = item.el.getAttribute && item.el.getAttribute("data-view");
-    if (view) {
-      this.openView(view);
-      return;
-    }
-    if (item.el.getAttribute && item.el.getAttribute("data-cmd")) {
-      item.el.click();
-      return;
-    }
-    item.el.click();
+    this.toast("Tieni premuto Indietro per uscire");
   };
   SpotifyUI.prototype.show = function() {
     if (this.root) this.root.style.display = "block";
@@ -722,9 +816,6 @@
     if (this.root) this.root.style.display = "none";
     this.visible = false;
   };
-  SpotifyUI.prototype.toggle = function() {
-    this.visible ? this.hide() : this.show();
-  };
   SpotifyUI.prototype.toast = function(msg) {
     if (!this.toastEl) return;
     this.toastEl.textContent = msg;
@@ -733,32 +824,11 @@
     var self = this;
     this._toastTimer = setTimeout(function() {
       self.toastEl.classList.remove("stv-show");
-    }, 1800);
+    }, 2200);
   };
   SpotifyUI.prototype.focusPlayer = function() {
-    this.focus(this.playerZone(), 2);
-  };
-  SpotifyUI.prototype.goHome = function() {
-    this.current = "home";
-    this.hero.style.display = "block";
-    Object.keys(this.views).forEach(function(k) {
-      this.views[k].classList.remove("stv-visible");
-    }, this);
-    (this.menuItems || []).forEach(function(it) {
-      it.classList.toggle("stv-active", it.getAttribute("data-view") === "home");
-    });
-    this.focus(0, 0);
-  };
-  SpotifyUI.prototype.back = function() {
-    if (this.current && this.current !== "home") {
-      this.goHome();
-      return;
-    }
-    if (this.zoneIndex !== 0) {
-      this.focus(0, 0);
-      return;
-    }
-    this.hide();
+    this.playerIndex = 2;
+    this.setZone("player");
   };
   function startUi() {
     if (window.__spotifyTvUi) return;
@@ -767,17 +837,119 @@
     registerUi(ui2);
     function mount() {
       if (!document.body) return setTimeout(mount, 50);
-      if (window.self !== window.top) return;
       ui2.mount();
-      document.addEventListener("keydown", function(e) {
-        if (!ui2.visible) return;
-        var k = e.keyCode;
-        if ([37, 38, 39, 40, 13, 10009].indexOf(k) === -1) return;
-        e.preventDefault();
-        e.stopPropagation();
-      }, true);
     }
     mount();
+  }
+
+  // src/basicnav.js
+  var TARGETS2 = 'input:not([type="hidden"]), button:not([disabled]), a[href], select, [role="button"], [role="checkbox"]';
+  function rectOf(e) {
+    var r = e.getBoundingClientRect();
+    if (r.width < 6 || r.height < 6 || r.bottom < 0 || r.top > innerHeight) return null;
+    var cs = getComputedStyle(e);
+    if (cs.visibility === "hidden" || cs.display === "none") return null;
+    return r;
+  }
+  function isText(e) {
+    return e && (e.tagName === "TEXTAREA" || e.tagName === "INPUT" && !/^(button|checkbox|radio|submit)$/.test(e.type));
+  }
+  function startBasicNav() {
+    var cur = null, ring = null;
+    function draw() {
+      if (!document.body) return requestAnimationFrame(draw);
+      if (!ring) {
+        ring = document.createElement("div");
+        ring.style.cssText = "position:fixed;z-index:2147483647;pointer-events:none;border:4px solid #1ed760;border-radius:10px;box-shadow:0 0 22px rgba(30,215,96,.6);display:none;transition:all .12s";
+        document.body.appendChild(ring);
+      }
+      var r = cur && document.contains(cur) ? cur.getBoundingClientRect() : null;
+      ring.style.display = r ? "block" : "none";
+      if (r) {
+        ring.style.left = r.left - 5 + "px";
+        ring.style.top = r.top - 5 + "px";
+        ring.style.width = r.width + 10 + "px";
+        ring.style.height = r.height + 10 + "px";
+      }
+      requestAnimationFrame(draw);
+    }
+    draw();
+    function targets() {
+      var out = [];
+      document.querySelectorAll(TARGETS2).forEach(function(e) {
+        var r = rectOf(e);
+        if (r) out.push({ el: e, r });
+      });
+      return out;
+    }
+    function go(e) {
+      cur = e;
+      e.scrollIntoView({ block: "center", behavior: "smooth" });
+      if (isText(e)) e.focus();
+    }
+    function move(dir) {
+      var list = targets();
+      if (!list.length) return;
+      if (!cur || !document.contains(cur)) {
+        go(list[0].el);
+        return;
+      }
+      var f = cur.getBoundingClientRect(), cx = f.left + f.width / 2, cy = f.top + f.height / 2;
+      var best = null, bestScore = Infinity;
+      list.forEach(function(it) {
+        if (it.el === cur) return;
+        var px = it.r.left + it.r.width / 2, py = it.r.top + it.r.height / 2, primary, ortho;
+        if (dir === "up") {
+          if (py >= cy - 4) return;
+          primary = cy - py;
+          ortho = Math.abs(px - cx);
+        }
+        if (dir === "down") {
+          if (py <= cy + 4) return;
+          primary = py - cy;
+          ortho = Math.abs(px - cx);
+        }
+        if (dir === "left") {
+          if (px >= cx - 4) return;
+          primary = cx - px;
+          ortho = Math.abs(py - cy);
+        }
+        if (dir === "right") {
+          if (px <= cx + 4) return;
+          primary = px - cx;
+          ortho = Math.abs(py - cy);
+        }
+        var s = primary + ortho * 2.5;
+        if (s < bestScore) {
+          bestScore = s;
+          best = it.el;
+        }
+      });
+      if (best) go(best);
+    }
+    window.addEventListener("keydown", function(e) {
+      var k = e.keyCode, handled = true;
+      var typing = isText(document.activeElement);
+      if (k === 37 && !typing) move("left");
+      else if (k === 39 && !typing) move("right");
+      else if (k === 38) {
+        if (typing) document.activeElement.blur();
+        move("up");
+      } else if (k === 40) {
+        if (typing) document.activeElement.blur();
+        move("down");
+      } else if (k === 13 && cur && !typing) {
+        if (isText(cur)) cur.focus();
+        else cur.click();
+      } else if (k === 10009) {
+        if (typing) document.activeElement.blur();
+        else history.back();
+      } else handled = false;
+      if (handled) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }, true);
   }
 
   // src/main.js
@@ -862,6 +1034,11 @@
         }
       });
     }
+    if (top && location.hostname !== "open.spotify.com") {
+      startBasicNav();
+      d("pagina esterna: navigazione minima");
+      return;
+    }
     if (top) {
       try {
         init();
@@ -936,6 +1113,10 @@
     window.addEventListener("keydown", function(e) {
       var k = e.keyCode;
       var handled = true;
+      var a = document.activeElement;
+      var typing = a && (a.tagName === "TEXTAREA" || a.tagName === "INPUT" && !/^(button|checkbox|radio|submit)$/.test(a.type));
+      if (typing && (k === KEY.LEFT || k === KEY.RIGHT || k === KEY.ENTER)) return;
+      if (typing && (k === KEY.UP || k === KEY.DOWN)) a.blur();
       if (top && uiVisible()) {
         switch (k) {
           case KEY.LEFT:
