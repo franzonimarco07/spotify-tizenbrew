@@ -26,6 +26,11 @@ import { ui, show, hide, toast, focusPlayer } from './registry.js';
     if (diag.length > 60) diag.shift();
   }
   d('boot v0.4.1 — ' + location.href.substr(0, 60));
+
+  // Marcatore nel titolo: sulla TV si vede subito se il modulo nuovo gira.
+  try {
+    if (window.self === window.top) document.title = '[v041] ' + (document.title || 'Spotify');
+  } catch (e) { }
   window.addEventListener('error', function (e) {
     d('ERRORE: ' + (e.message || '') + ' @ ' + (e.filename || '').split('/').pop() + ':' + e.lineno);
   });
@@ -188,6 +193,12 @@ import { ui, show, hide, toast, focusPlayer } from './registry.js';
     diagBox.style.display = 'block';
   }
   window.__spotifyTv.showDiag = showDiag;
+
+  // Secondo aggancio, non in fase di capture: il primo listener potrebbe non
+  // vedere il tasto se qualcosa lo ferma prima. Qui non blocchiamo nulla.
+  document.addEventListener('keydown', function (e) {
+    if (e.keyCode === KEY.YELLOW) showDiag();
+  }, false);
 
   // Se la pagina principale si ricarica, la UI va ricostruita.
   window.addEventListener('beforeunload', function () { window.__spotifyTvUi = null; });

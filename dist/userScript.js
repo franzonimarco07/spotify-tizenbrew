@@ -1383,6 +1383,10 @@
       if (diag.length > 60) diag.shift();
     }
     d("boot v0.4.1 \u2014 " + location.href.substr(0, 60));
+    try {
+      if (window.self === window.top) document.title = "[v041] " + (document.title || "Spotify");
+    } catch (e) {
+    }
     window.addEventListener("error", function(e) {
       d("ERRORE: " + (e.message || "") + " @ " + (e.filename || "").split("/").pop() + ":" + e.lineno);
     });
@@ -1641,6 +1645,9 @@
       diagBox.style.display = "block";
     }
     window.__spotifyTv.showDiag = showDiag;
+    document.addEventListener("keydown", function(e) {
+      if (e.keyCode === KEY.YELLOW) showDiag();
+    }, false);
     window.addEventListener("beforeunload", function() {
       window.__spotifyTvUi = null;
     });
