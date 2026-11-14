@@ -1,6 +1,11 @@
 # Push su GitHub — v0.4
 
-Commit già fatto in locale: **05d7b02** — `v0.4: motore no-ads + interfaccia TV con navigazione da telecomando`
+Commit da pushare (in ordine):
+- `05d7b02` v0.4 — motore no-ads + UI TV
+- `a4ca5e3` PUSH.md
+- `e0abf7a` v0.4.1 — diagnostica a schermo (tasto GIALLO), mount della UI a prova di errore
+- `384a9c9` v0.4.1 — versione allineata
+
 Branch: `main`, remoto: `https://github.com/franzonimarco07/spotify-tizenbrew.git`
 
 Il commit è su `main` e il working tree è pulito: non serve altro lato git.
@@ -51,14 +56,16 @@ Verifica che sia arrivata la v0.4.0:
 https://cdn.jsdelivr.net/gh/franzonimarco07/spotify-tizenbrew@main/package.json
 ```
 
-deve contenere `"version": "0.4.0"` e `"serviceFile": "dist/service.js"`.
+deve contenere `"version": "0.4.1"` e `"serviceFile": "dist/service.js"`.
+Se dice ancora 0.4.0 la cache non è stata svuotata: ripeti i purge e riprova.
 
 ## 3. Sulla TV
 
 1. TizenBrew → Module Manager → **rimuovi** `franzonimarco07/spotify-tizenbrew` (il servizio tiene in cache l'elenco dei moduli).
 2. Riaggiungilo come `franzonimarco07/spotify-tizenbrew` — **senza** il prefisso `gh/`.
 3. Apri il modulo: deve comparire la schermata nera con "La tua musica, senza pubblicità." sopra la pagina di Spotify.
-4. Tasto **GIALLO**: attiva i log in console; tasto **VERDE**: quante pubblicità sono state bloccate.
+4. Tasto **GIALLO**: mostra a schermo la diagnostica (versione del modulo, se la UI si è montata, errori, eventi del no-ads). Se vedi ancora la UI vecchia, premi GIALLO: se non compare nulla, il modulo non è stato aggiornato sulla TV (cache/modulo da riaggiungere); se compare `v0.4.1` e `UI montata`, il codice nuovo sta girando.
+5. Tasto **VERDE**: quante pubblicità sono state bloccate.
 
 Se al posto della UI vedi la pagina di Spotify normale, il modulo non è stato iniettato: riavvia la TV e riapri TizenBrew.
 
