@@ -24,11 +24,11 @@ import { startBasicNav } from './basicnav.js';
     diag.push(new Date().toTimeString().substr(0, 8) + ' ' + msg);
     if (diag.length > 60) diag.shift();
   }
-  d('boot v0.5.0 — ' + location.href.substr(0, 60));
+  d('boot v0.6.0 — ' + location.href.substr(0, 60));
 
   // Marcatore nel titolo: sulla TV si vede subito se il modulo nuovo gira.
   try {
-    if (window.self === window.top) document.title = '[v050] ' + (document.title || 'Spotify');
+    if (window.self === window.top) document.title = '[v060] ' + (document.title || 'Spotify');
   } catch (e) { }
   window.addEventListener('error', function (e) {
     d('ERRORE: ' + (e.message || '') + ' @ ' + (e.filename || '').split('/').pop() + ':' + e.lineno);
@@ -38,7 +38,7 @@ import { startBasicNav } from './basicnav.js';
   var cfg = (window.__spotifyTvConfig) || {};
 
   window.__spotifyTv = {
-    version: '0.5.0',
+    version: '0.6.0',
     debug: true,
     log: diag,
     diag: function () { return diag.join('\n'); },

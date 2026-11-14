@@ -85,3 +85,13 @@ Developer mode della TV 2: si attiva da App → `12345`. Per installare da Mac, 
 - `src/basicnav.js`: navigazione minima sulla pagina di login (accounts.spotify.com).
 - Provato sul Mac in Chrome headless con `open.spotify.com` senza account: splash, navigazione, ricerca, apertura
   pagine, ritorno. Da verificare sulla TV: login, riproduzione, velocità.
+
+## 7. v0.6.0 — tema "frontale hi-fi" e impaginazione robusta
+- Di Spotify resta visibile solo `#main-view` (fissato fra le nostre barre); `#main` è `visibility:hidden`, così con
+  il login (libreria laterale, pannello "In riproduzione") non si sovrappone nulla. Finestre e menu di Spotify sono
+  fuori da `#main` e restano visibili.
+- La pagina è ricolorata sovrascrivendo le variabili del tema di Spotify (`--background-base`, `--text-base`,
+  `--encore-*-font-stack`…), come i temi di Spicetify. Palette: grafite #141821, pannello #1C2230, avorio #F2EEE3,
+  acciaio #9AA2B4, ambra #FFB547. Font Sora (Google Fonts).
+- Scorrimento verticale sul contenitore `#main-view [data-overlayscrollbars-viewport]`.
+- Lancetta ambra sotto il menu, scala di sintonia nel player e nella schermata di avvio.
