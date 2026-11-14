@@ -1,7 +1,7 @@
 {
   "name": "spotify-tizenbrew",
   "appName": "Spotify TV Mod",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Spotify web player on Samsung Tizen TVs: desktop user agent, remote control navigation, custom themes.",
   "packageType": "mods",
   "websiteURL": "https://open.spotify.com",

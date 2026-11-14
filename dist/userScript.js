@@ -1,4 +1,4 @@
-/* Spotify TV Mod for TizenBrew — v0.2 (test build)
+/* Spotify TV Mod for TizenBrew — v0.3 (test build)
  * Injected by TizenBrew into open.spotify.com (also into Spotify's "unsupported browser" page).
  *  1. Desktop Chrome user agent (Spotify blocks "SMART-TV; Tizen").
  *  2. Remote control: arrows = spatial navigation, OK = click, Back = back,
@@ -8,7 +8,7 @@
 (function () {
   'use strict';
   if (window.__spotifyTvMod) return;
-  window.__spotifyTvMod = { version: '0.2.0', log: [] };
+  window.__spotifyTvMod = { version: '0.3.0', log: [] };
 
   // Spotify blocks Chrome <= 108 server side; the TV engine is Chromium 108.
   var CHROME = '120.0.0.0';
@@ -95,25 +95,42 @@
     return r;
   }
 
+  // Topmost element under the centre must be el (or inside it): skips things covered by banners/dialogs.
+  function reachable(el, r) {
+    var x = Math.min(Math.max(r.left + r.width / 2, 1), innerWidth - 1);
+    var y = Math.min(Math.max(r.top + r.height / 2, 1), innerHeight - 1);
+    var hit = document.elementFromPoint(x, y);
+    return !!hit && (hit === el || el.contains(hit) || hit.contains(el));
+  }
+
   function candidates() {
     var list = [];
     var els = document.querySelectorAll(FOCUSABLE);
     for (var i = 0; i < els.length; i++) {
       var el = els[i];
-      // skip elements nested inside another focusable (e.g. button inside a row) unless it's the only target
+      if (el.closest('#stvmod-diag')) continue;
       var r = visibleRect(el);
-      if (r) list.push({ el: el, r: r });
+      if (r && reachable(el, r)) list.push({ el: el, r: r });
     }
     return list;
   }
 
   function center(r) { return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }
 
+  // Our own cursor: page focus can be stolen or hidden by the site, so we track it ourselves.
+  var cursorEl = null;
+
+  function describe(el) {
+    var t = (el.getAttribute('aria-label') || el.textContent || el.getAttribute('data-testid') || '').trim().replace(/\s+/g, ' ');
+    return el.tagName.toLowerCase() + ' "' + t.substr(0, 40) + '"';
+  }
+
   function move(dir) {
-    var cur = document.activeElement;
+    var cur = cursorEl && document.contains(cursorEl) ? cursorEl : null;
     var list = candidates();
-    if (!list.length) return;
-    if (!cur || cur === document.body || !visibleRect(cur)) {
+    if (!list.length) { log('no targets on screen'); return; }
+    if (!cur || !visibleRect(cur)) {
+      list.sort(function (a, b) { return (a.r.top - b.r.top) || (a.r.left - b.r.left); });
       focusEl(list[0].el);
       return;
     }
@@ -149,10 +166,45 @@
   }
 
   function focusEl(el) {
+    cursorEl = el;
     if (!el.hasAttribute('tabindex') && !/^(A|BUTTON|INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) el.setAttribute('tabindex', '-1');
-    el.focus({ preventScroll: true });
+    try { el.focus({ preventScroll: true }); } catch (e) { }
     el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+    log('→ ' + describe(el));
+    drawRing();
   }
+
+  var ringEl = null;
+  function drawRing() {
+    if (!document.body) return;
+    if (!ringEl) {
+      ringEl = document.createElement('div');
+      ringEl.id = 'stvmod-ring';
+      document.body.appendChild(ringEl);
+    }
+    if (!cursorEl || !document.contains(cursorEl)) { ringEl.style.display = 'none'; return; }
+    var r = cursorEl.getBoundingClientRect();
+    ringEl.style.display = 'block';
+    ringEl.style.left = (r.left - 5) + 'px';
+    ringEl.style.top = (r.top - 5) + 'px';
+    ringEl.style.width = (r.width + 10) + 'px';
+    ringEl.style.height = (r.height + 10) + 'px';
+  }
+  // keep the ring glued to the element while the page scrolls/animates
+  (function follow() { drawRing(); requestAnimationFrame(follow); })();
+
+  function activate(el) {
+    log('OK ' + describe(el));
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') { el.focus(); return; }
+    el.click();
+  }
+
+  // Cookie banner: reject automatically (OneTrust).
+  var cookieTimer = setInterval(function () {
+    var b = document.getElementById('onetrust-reject-all-handler');
+    if (b && b.offsetParent) { b.click(); log('cookie banner: rifiutati'); clearInterval(cookieTimer); }
+  }, 1000);
+  setTimeout(function () { clearInterval(cookieTimer); }, 60000);
 
   function clickTestId(id) {
     var el = document.querySelector('[data-testid="' + id + '"]');
@@ -175,7 +227,7 @@
       case KEY.DOWN: move('down'); break;
       case KEY.ENTER:
         if (isTextInput(a)) { handled = false; break; }
-        if (a && a !== document.body) a.click(); else move('down');
+        if (cursorEl && document.contains(cursorEl)) activate(cursorEl); else move('down');
         break;
       case KEY.BACK:
         if (isTextInput(a)) a.blur(); else history.back();
@@ -196,7 +248,8 @@
   var diagVisible = true, lastKey = '-', diagEl = null, emeStatus = 'checking…';
 
   var CSS = [
-    ':focus, :focus-visible { outline: 4px solid #1ed760 !important; outline-offset: 2px !important; border-radius: 6px; }',
+    '#stvmod-ring { position: fixed; z-index: 2147483646; pointer-events: none; display: none; border: 4px solid #1ed760; border-radius: 10px;',
+    '  box-shadow: 0 0 0 3px rgba(0,0,0,.6), 0 0 24px rgba(30,215,96,.7); transition: left .12s, top .12s, width .12s, height .12s; }',
     '#stvmod-diag { position: fixed; z-index: 2147483647; right: 24px; bottom: 120px; width: 620px; max-height: 60vh; overflow: hidden;',
     '  background: rgba(0,0,0,.85); color: #e8e8e8; font: 15px/1.35 monospace; padding: 14px 16px; border-radius: 10px; border: 1px solid #1ed760; white-space: pre-wrap; pointer-events: none; }'
   ].join('\n');
