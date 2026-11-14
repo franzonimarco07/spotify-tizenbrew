@@ -10,4 +10,4 @@ Modulo [TizenBrew](https://github.com/reisxd/TizenBrew) che apre il web player d
 
 In TizenBrew → Module Manager → aggiungi il modulo `gh/<utente>/spotify-tizenbrew`.
 
-Requisiti: account Spotify Premium per la riproduzione nel web player, TV con Widevine (verificato su Tizen 8.0 / 2024).
+Requisiti: TV con Widevine (verificato su Tizen 8.0 / 2024).
