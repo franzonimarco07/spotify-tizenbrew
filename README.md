@@ -18,6 +18,7 @@ Funziona con il piano di Spotify dell'account usato (Free con pubblicità, Premi
 | play/pausa, avanti, indietro | controllano la musica |
 | BLU | va ai comandi del player |
 | GIALLO | diagnostica a schermo |
+| VERDE | mostra Spotify senza la nostra impaginazione (e viceversa) |
 | ROSSO | ricarica |
 
 ## Installazione

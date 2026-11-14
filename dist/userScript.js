@@ -1,4 +1,4 @@
-/* Spotify TV Mod v0.6.0 — UI TV per il web player di Spotify. Modulo TizenBrew. */
+/* Spotify TV Mod v0.7.0 — UI TV per il web player di Spotify. Modulo TizenBrew. */
 "use strict";
 (() => {
   var __defProp = Object.defineProperty;
@@ -317,125 +317,98 @@
 
   // src/ui.js
   var C = {
-    graphite: "#141821",
-    panel: "#1C2230",
-    raised: "#252C3D",
-    ivory: "#F2EEE3",
-    steel: "#9AA2B4",
-    amber: "#FFB547"
+    black: "#000000",
+    base: "#121212",
+    elevated: "#1f1f1f",
+    highlight: "#2a2a2a",
+    text: "#ffffff",
+    subdued: "#b3b3b3",
+    green: "#1ed760"
   };
-  var FONT = '"Sora", "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
-  var TOP_H = 12;
-  var BOTTOM_H = 16;
+  var FONT = 'var(--encore-body-font-stack, "Helvetica Neue", Helvetica, Arial, sans-serif)';
+  var TITLE_FONT = 'var(--encore-title-font-stack, "Helvetica Neue", Helvetica, Arial, sans-serif)';
+  var TOP_H = 11;
+  var BOTTOM_H = 15;
   var CSS = `
-/* ---------- Spotify: solo l'area dei contenuti, ricolorata ---------- */
-html, body { background: ${C.graphite} !important; }
-#main { visibility: hidden !important; }
-#main-view { visibility: visible !important; position: fixed !important; top: ${TOP_H}vh !important; bottom: ${BOTTOM_H}vh !important;
-  left: 0 !important; right: 0 !important; width: auto !important; height: auto !important; z-index: 1; }
-#global-nav-bar { position: relative; z-index: 2147483001 !important; }
-#global-nav-bar form[role="search"] { visibility: visible !important; position: fixed !important; top: 3.2vh; right: 3vw;
-  width: 28vw !important; max-width: none !important; z-index: 2147483001; }
-#global-nav-bar form[role="search"] input { font-size: 2.2vmin !important; }
+html.stv-layout #main { visibility: hidden !important; }
+html.stv-layout [data-stv-view] { visibility: visible !important; position: fixed !important; top: ${TOP_H}vh !important;
+  bottom: ${BOTTOM_H}vh !important; left: 0 !important; right: 0 !important; width: auto !important; height: auto !important;
+  max-width: none !important; z-index: 1; border-radius: 0 !important; }
+html.stv-layout #global-nav-bar { position: relative; z-index: 2147483001 !important; }
+html.stv-layout #global-nav-bar form[role="search"] { visibility: visible !important; position: fixed !important; top: 2.6vh;
+  right: 3vw; width: 28vw !important; max-width: none !important; }
 #onetrust-consent-sdk { display: none !important; }
+html.stv-layout [data-stv-view] *, html.stv-layout [data-stv-view] *::before, html.stv-layout [data-stv-view] *::after {
+  animation-duration: 0s !important; animation-delay: 0s !important; transition-duration: 0s !important; transition-delay: 0s !important; }
+html.stv-layout [data-stv-view] * { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
 
-.encore-dark-theme, .encore-dark-theme .encore-base-set {
-  --background-base: ${C.graphite} !important; --background-highlight: ${C.raised} !important;
-  --background-press: #0F121A !important; --background-elevated-base: ${C.panel} !important;
-  --background-elevated-highlight: ${C.raised} !important; --background-tinted-base: rgba(242,238,227,.07) !important;
-  --background-tinted-highlight: rgba(242,238,227,.12) !important;
-  --text-base: ${C.ivory} !important; --text-subdued: ${C.steel} !important;
-  --essential-bright-accent: ${C.amber} !important; --text-bright-accent: ${C.amber} !important;
-  --encore-title-font-stack: ${FONT} !important; --encore-body-font-stack: ${FONT} !important;
-}
-.encore-dark-theme .encore-bright-accent-set {
-  --background-base: ${C.amber} !important; --background-highlight: #FFC676 !important;
-  --background-press: #E59A2E !important; --text-base: ${C.graphite} !important;
-}
-#main-view *, #main-view *::before, #main-view *::after { animation-duration: 0s !important; animation-delay: 0s !important;
-  transition-duration: 0s !important; transition-delay: 0s !important; }
-#main-view * { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
-#main-view h1 { font-size: 5.4vmin !important; letter-spacing: -0.01em !important; }
-#main-view h2 { font-size: 3.4vmin !important; }
-
-/* ---------- interfaccia nostra ---------- */
-#stv-root { position: fixed; inset: 0; z-index: 2147483000; pointer-events: none; color: ${C.ivory}; font-family: ${FONT};
+/* ---------- interfaccia nostra, nello stile di Spotify ---------- */
+#stv-root { position: fixed; inset: 0; z-index: 2147483000; pointer-events: none; color: ${C.text}; font-family: ${FONT};
   -webkit-font-smoothing: antialiased; }
 #stv-root * { box-sizing: border-box; }
 .stv-top, .stv-bottom { position: absolute; left: 0; right: 0; pointer-events: auto; }
 
-/* barra in alto: menu con la lancetta */
-/* trasparente: dietro c'\xE8 solo il fondo grafite e, a destra, il campo di ricerca di Spotify */
-.stv-top { top: 0; height: ${TOP_H}vh; display: flex; align-items: center; padding: 0 3vw; background: transparent;
-  border-bottom: 1px solid rgba(242,238,227,.06); }
-.stv-knob { width: 4.4vmin; height: 4.4vmin; border-radius: 50%; border: 2px solid ${C.steel}; position: relative; margin-right: 2.6vw; flex: 0 0 auto; }
-.stv-knob::after { content: ''; position: absolute; left: 50%; top: 14%; width: 2px; height: 34%; margin-left: -1px; background: ${C.amber}; border-radius: 1px; }
-.stv-menu { position: relative; display: flex; gap: 3.2vw; height: 100%; align-items: center; }
-.stv-menu-item { font-size: 2.6vmin; font-weight: 400; color: ${C.steel}; white-space: nowrap; padding: 1vh 0; transition: color .15s; }
-.stv-menu-item.stv-active { color: ${C.ivory}; font-weight: 600; }
-.stv-menu-item.stv-focus { color: ${C.amber}; }
-.stv-needle { position: absolute; left: 0; bottom: 2.2vh; height: 3px; width: 40px; background: ${C.steel}; border-radius: 2px;
-  transform-origin: left center; transition: transform .32s cubic-bezier(.3,.7,.2,1), background .2s; }
-.stv-needle.stv-lit { background: ${C.amber}; }
+.stv-top { top: 0; height: ${TOP_H}vh; display: flex; align-items: center; gap: 1vw; padding: 0 3vw; background: transparent; }
+.stv-menu { display: flex; gap: .8vw; }
+.stv-menu-item { padding: 1.1vh 1.6vw; border-radius: 999px; font-size: 2.3vmin; font-weight: 700; color: ${C.text};
+  background: ${C.elevated}; white-space: nowrap; transition: transform .15s, background .15s, color .15s; }
+.stv-menu-item.stv-active { background: ${C.text}; color: ${C.black}; }
+.stv-menu-item.stv-focus { outline: 3px solid ${C.text}; outline-offset: 3px; transform: scale(1.06); }
 
-/* player in basso */
-.stv-bottom { bottom: 0; height: ${BOTTOM_H}vh; display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: 1fr auto;
-  column-gap: 2vw; padding: 2vh 3vw 2.2vh; background: ${C.panel}; border-top: 1px solid rgba(242,238,227,.06); }
-.stv-art { grid-row: 1 / span 2; align-self: center; width: 11vh; height: 11vh; border-radius: 6px; background: ${C.raised} center/cover no-repeat; }
-.stv-meta { min-width: 0; align-self: center; }
-.stv-meta h2 { margin: 0; font-size: 3.1vmin; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.stv-meta p { margin: .6vh 0 0; font-size: 2.3vmin; color: ${C.steel}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.stv-tag { display: inline-block; margin-left: 1vw; padding: .2vh .7vw; border: 1.5px solid ${C.amber}; border-radius: 4px;
-  font-size: 1.7vmin; font-weight: 600; color: ${C.amber}; vertical-align: middle; }
-.stv-controls { grid-column: 3; grid-row: 1 / span 2; align-self: center; display: flex; align-items: center; gap: 1.2vw; }
-.stv-btn { width: 7vmin; height: 7vmin; border-radius: 50%; display: grid; place-items: center; border: 2px solid rgba(154,162,180,.5);
-  transition: transform .15s, background .15s, border-color .15s; }
-.stv-btn svg { width: 3.2vmin; height: 3.2vmin; fill: ${C.ivory}; }
-.stv-btn.stv-play { width: 9vmin; height: 9vmin; background: ${C.ivory}; border-color: ${C.ivory}; }
-.stv-btn.stv-play svg { width: 4vmin; height: 4vmin; fill: ${C.graphite}; }
-.stv-btn.stv-focus { background: ${C.amber}; border-color: ${C.amber}; transform: scale(1.08); }
-.stv-btn.stv-focus svg { fill: ${C.graphite}; }
-.stv-scale { grid-column: 2; display: flex; align-items: center; gap: 1.2vw; font-size: 1.9vmin; color: ${C.steel};
+.stv-bottom { bottom: 0; height: ${BOTTOM_H}vh; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+  column-gap: 2vw; padding: 0 3vw; background: ${C.black}; }
+.stv-now { display: flex; align-items: center; gap: 1.4vw; min-width: 0; }
+.stv-art { width: 9.5vh; height: 9.5vh; border-radius: 4px; background: ${C.elevated} center/cover no-repeat; flex: 0 0 auto; }
+.stv-meta { min-width: 0; }
+.stv-meta h2 { margin: 0; font-size: 2.6vmin; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stv-meta p { margin: .5vh 0 0; font-size: 2.1vmin; color: ${C.subdued}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stv-tag { display: inline-block; margin-left: .8vw; padding: .2vh .6vw; border-radius: 4px; font-size: 1.6vmin; font-weight: 700;
+  background: ${C.highlight}; color: ${C.subdued}; vertical-align: middle; }
+.stv-center { display: flex; flex-direction: column; align-items: center; gap: 1.2vh; width: 40vw; }
+.stv-controls { display: flex; align-items: center; gap: 1.8vw; }
+.stv-btn { width: 6vmin; height: 6vmin; border-radius: 50%; display: grid; place-items: center; transition: transform .15s, background .15s; }
+.stv-btn svg { width: 3vmin; height: 3vmin; fill: ${C.subdued}; }
+.stv-btn.stv-play { width: 7.4vmin; height: 7.4vmin; background: ${C.text}; }
+.stv-btn.stv-play svg { fill: ${C.black}; width: 3.4vmin; height: 3.4vmin; }
+.stv-btn.stv-focus { transform: scale(1.12); background: ${C.highlight}; }
+.stv-btn.stv-focus svg { fill: ${C.text}; }
+.stv-btn.stv-play.stv-focus { background: ${C.green}; }
+.stv-btn.stv-play.stv-focus svg { fill: ${C.black}; }
+.stv-scale { display: flex; align-items: center; gap: .8vw; width: 100%; font-size: 1.7vmin; color: ${C.subdued};
   font-variant-numeric: tabular-nums; }
-.stv-track { position: relative; flex: 1 1 auto; height: 1.6vh;
-  background: repeating-linear-gradient(90deg, rgba(154,162,180,.45) 0 1px, transparent 1px 1.5%) center / 100% 60% no-repeat; }
-.stv-track > i { position: absolute; left: 0; top: 50%; height: 3px; margin-top: -1.5px; width: 100%; background: ${C.amber};
-  transform-origin: left center; transform: scaleX(0); transition: transform .9s linear; }
+.stv-track { position: relative; flex: 1 1 auto; height: 4px; border-radius: 2px; background: #4d4d4d; overflow: hidden; }
+.stv-track > i { position: absolute; inset: 0; background: ${C.text}; border-radius: 2px; transform-origin: left center;
+  transform: scaleX(0); transition: transform .9s linear; }
+.stv-bottom.stv-playing .stv-track > i { background: ${C.green}; }
 
-/* anello di focus sugli elementi della pagina */
-.stv-ring { position: absolute; display: none; pointer-events: none; border: 3px solid ${C.amber}; border-radius: 10px;
-  box-shadow: 0 0 0 5px rgba(255,181,71,.16); transition: transform .14s ease-out, width .14s ease-out, height .14s ease-out;
-  left: 0; top: 0; }
+.stv-ring { position: absolute; left: 0; top: 0; display: none; pointer-events: none; border: 3px solid ${C.text}; border-radius: 8px;
+  transition: transform .12s ease-out, width .12s ease-out, height .12s ease-out; }
 
-/* caricamento al cambio pagina: una riga ambra che scorre sotto la barra */
 .stv-loading { position: absolute; top: ${TOP_H}vh; left: 0; right: 0; height: 3px; overflow: hidden; opacity: 0; transition: opacity .2s; }
 .stv-loading.stv-on { opacity: 1; }
-.stv-loading i { position: absolute; top: 0; left: 0; width: 30%; height: 100%; background: ${C.amber};
+.stv-loading i { position: absolute; top: 0; left: 0; width: 30%; height: 100%; background: ${C.green};
   animation: stv-scan 1.1s infinite cubic-bezier(.45,0,.55,1); }
 @keyframes stv-scan { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
 
-.stv-toast { position: absolute; left: 3vw; bottom: calc(${BOTTOM_H}vh + 2.4vh); display: flex; align-items: center; gap: 1vw;
-  padding: 1.4vh 1.8vw; background: ${C.raised}; border-radius: 8px; font-size: 2.2vmin; opacity: 0; transform: translateY(8px);
-  transition: opacity .2s, transform .2s; }
-.stv-toast::before { content: ''; width: 1vmin; height: 1vmin; border-radius: 50%; background: ${C.amber}; }
-.stv-toast.stv-show { opacity: 1; transform: none; }
+.stv-toast { position: absolute; left: 50%; bottom: calc(${BOTTOM_H}vh + 3vh); transform: translate(-50%, 8px); opacity: 0;
+  padding: 1.3vh 2vw; background: ${C.text}; color: ${C.black}; border-radius: 8px; font-size: 2.1vmin; font-weight: 700;
+  transition: opacity .2s, transform .2s; white-space: nowrap; }
+.stv-toast.stv-show { opacity: 1; transform: translate(-50%, 0); }
 
-/* schermata di avvio: la lancetta cerca la stazione */
 .stv-splash { position: absolute; inset: 0; pointer-events: none; display: flex; flex-direction: column; align-items: center;
-  justify-content: center; background: ${C.graphite}; transition: opacity .5s; }
+  justify-content: center; gap: 4vh; background: ${C.base}; transition: opacity .5s; }
 .stv-splash.stv-gone { opacity: 0; }
-.stv-splash h1 { margin: 0 0 6vh; font-size: 7vmin; font-weight: 700; letter-spacing: -0.02em; }
-.stv-dial { position: relative; width: 44vw; height: 6vh;
-  background: repeating-linear-gradient(90deg, rgba(154,162,180,.5) 0 2px, transparent 2px 2.5%) center bottom / 100% 55% no-repeat; }
-.stv-dial::before { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: rgba(154,162,180,.5); }
-.stv-dial i { position: absolute; left: 0; bottom: 0; width: 3px; height: 100%; background: ${C.amber}; border-radius: 2px;
-  animation: stv-tune 2.4s infinite cubic-bezier(.45,0,.55,1) alternate; }
-@keyframes stv-tune { from { transform: translateX(0); } to { transform: translateX(44vw); } }
-.stv-splash p { margin: 4vh 0 0; font-size: 2.4vmin; color: ${C.steel}; }
+.stv-splash h1 { margin: 0; font-family: ${TITLE_FONT}; font-size: 7vmin; font-weight: 800; letter-spacing: -0.03em; }
+.stv-eq { display: flex; align-items: flex-end; gap: 1vmin; height: 7vmin; }
+.stv-eq i { width: 1.4vmin; height: 100%; border-radius: .7vmin; background: ${C.green}; transform-origin: bottom;
+  animation: stv-eq 1s infinite ease-in-out; }
+.stv-eq i:nth-child(2) { animation-delay: -.3s; } .stv-eq i:nth-child(3) { animation-delay: -.6s; } .stv-eq i:nth-child(4) { animation-delay: -.15s; }
+@keyframes stv-eq { 0%,100% { transform: scaleY(.3); } 50% { transform: scaleY(1); } }
+.stv-splash p { margin: 0; font-size: 2.3vmin; color: ${C.subdued}; }
 
 @media (prefers-reduced-motion: reduce) {
-  .stv-dial i, .stv-loading i { animation: none; }
-  .stv-needle, .stv-ring, .stv-track > i { transition: none; }
+  .stv-eq i, .stv-loading i { animation: none; }
+  .stv-ring, .stv-track > i { transition: none; }
 }
 `;
   var PLAY = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
@@ -447,7 +420,7 @@ html, body { background: ${C.graphite} !important; }
   var VIEWS = [
     { id: "home", label: "Home", path: "/" },
     { id: "search", label: "Cerca", path: "/search" },
-    { id: "liked", label: "Preferiti", path: "/collection/tracks" }
+    { id: "liked", label: "Brani che ti piacciono", path: "/collection/tracks" }
   ];
   var TARGETS = 'a[href], button:not([disabled]), input, [role="button"], [role="link"], [role="row"], [role="tab"], [role="option"]';
   function el(tag, cls, html) {
@@ -478,17 +451,13 @@ html, body { background: ${C.graphite} !important; }
   }
   SpotifyUI.prototype.mount = function() {
     var self = this;
-    var font = el("link");
-    font.rel = "stylesheet";
-    font.href = "https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&display=swap";
-    (document.head || document.documentElement).appendChild(font);
     var style = el("style");
     style.id = "stv-style";
     style.textContent = CSS;
     (document.head || document.documentElement).appendChild(style);
     var root = el("div");
     root.id = "stv-root";
-    root.innerHTML = '<div class="stv-top"><div class="stv-knob"></div><div class="stv-menu"><div class="stv-needle"></div></div></div><div class="stv-loading"><i></i></div><div class="stv-bottom">  <div class="stv-art"></div>  <div class="stv-meta"><h2>Niente in riproduzione</h2><p>Scegli un brano o una playlist</p></div>  <div class="stv-controls">    <div class="stv-btn" data-cmd="rw">' + RW + '</div>    <div class="stv-btn" data-cmd="prev">' + PREV + '</div>    <div class="stv-btn stv-play" data-cmd="play">' + PLAY + '</div>    <div class="stv-btn" data-cmd="next">' + NEXT + '</div>    <div class="stv-btn" data-cmd="ff">' + FF + '</div>  </div>  <div class="stv-scale"><span class="stv-time">0:00</span><div class="stv-track"><i></i></div><span class="stv-dur">0:00</span></div></div><div class="stv-ring"></div><div class="stv-toast"></div><div class="stv-splash"><h1>Spotify</h1><div class="stv-dial"><i></i></div><p class="stv-splash-msg">Avvio di Spotify\u2026</p></div>';
+    root.innerHTML = '<div class="stv-top"><div class="stv-menu"></div></div><div class="stv-loading"><i></i></div><div class="stv-bottom">  <div class="stv-now"><div class="stv-art"></div>    <div class="stv-meta"><h2>Niente in riproduzione</h2><p>Scegli un brano o una playlist</p></div></div>  <div class="stv-center"><div class="stv-controls">    <div class="stv-btn" data-cmd="rw">' + RW + '</div>    <div class="stv-btn" data-cmd="prev">' + PREV + '</div>    <div class="stv-btn stv-play" data-cmd="play">' + PLAY + '</div>    <div class="stv-btn" data-cmd="next">' + NEXT + '</div>    <div class="stv-btn" data-cmd="ff">' + FF + '</div>  </div>  <div class="stv-scale"><span class="stv-time">0:00</span><div class="stv-track"><i></i></div><span class="stv-dur">0:00</span></div></div>  <div></div></div><div class="stv-ring"></div><div class="stv-toast"></div><div class="stv-splash"><h1>Spotify</h1><div class="stv-eq"><i></i><i></i><i></i><i></i></div>  <p class="stv-splash-msg">Avvio di Spotify\u2026</p></div>';
     document.body.appendChild(root);
     this.root = root;
     this.ring = root.querySelector(".stv-ring");
@@ -496,7 +465,6 @@ html, body { background: ${C.graphite} !important; }
     this.loading = root.querySelector(".stv-loading");
     this.splash = root.querySelector(".stv-splash");
     this.splashMsg = root.querySelector(".stv-splash-msg");
-    this.needle = root.querySelector(".stv-needle");
     this.art = root.querySelector(".stv-art");
     this.title = root.querySelector(".stv-meta h2");
     this.sub = root.querySelector(".stv-meta p");
@@ -504,6 +472,7 @@ html, body { background: ${C.graphite} !important; }
     this.durEl = root.querySelector(".stv-dur");
     this.fill = root.querySelector(".stv-track > i");
     this.playBtn = root.querySelector('[data-cmd="play"]');
+    this.bottom = root.querySelector(".stv-bottom");
     this.playerEls = Array.prototype.slice.call(root.querySelectorAll(".stv-btn"));
     var menu = root.querySelector(".stv-menu");
     this.menuItems = VIEWS.map(function(v) {
@@ -516,6 +485,10 @@ html, body { background: ${C.graphite} !important; }
     this.loginItem.setAttribute("data-view", "login");
     this.loginItem.style.display = "none";
     menu.appendChild(this.loginItem);
+    this.layout();
+    setInterval(function() {
+      self.layout();
+    }, 1e3);
     this.bindState();
     this.markActive();
     this.show();
@@ -555,6 +528,7 @@ html, body { background: ${C.graphite} !important; }
     });
     on("playing", function(p) {
       self.playBtn.innerHTML = p ? PAUSE : PLAY;
+      self.bottom.classList.toggle("stv-playing", !!p);
     });
     on("position", function(pos) {
       var d = st.duration || 0;
@@ -568,11 +542,33 @@ html, body { background: ${C.graphite} !important; }
       if (!isAd && tag) tag.parentNode.removeChild(tag);
     });
   };
+  function findView() {
+    var v = document.getElementById("main-view");
+    if (v && v.querySelector("main")) return v;
+    var m = document.querySelector("main");
+    if (!m) return null;
+    var node = m, r = m.getBoundingClientRect();
+    while (node.parentElement && node.parentElement !== document.body) {
+      var pr = node.parentElement.getBoundingClientRect();
+      if (Math.abs(pr.width - r.width) > 2 || Math.abs(pr.height - r.height) > 2) break;
+      node = node.parentElement;
+    }
+    return node;
+  }
+  SpotifyUI.prototype.layout = function() {
+    var v = findView();
+    var old = document.querySelector("[data-stv-view]");
+    if (old && old !== v) old.removeAttribute("data-stv-view");
+    if (v) v.setAttribute("data-stv-view", "");
+    document.documentElement.classList.toggle("stv-layout", !!v && !this.plain);
+    this.view = v;
+  };
   SpotifyUI.prototype.mainEl = function() {
-    return document.getElementById("main-view") || document.querySelector("main");
+    return this.view || findView();
   };
   function mainScroller() {
-    return document.querySelector("#main-view [data-overlayscrollbars-viewport]") || document.querySelector("#main-view .main-view-container__scroll-node");
+    var v = document.querySelector("[data-stv-view]") || document;
+    return v.querySelector("[data-overlayscrollbars-viewport]") || v.querySelector(".main-view-container__scroll-node");
   }
   function visibleRect(e) {
     var r = e.getBoundingClientRect();
@@ -695,20 +691,7 @@ html, body { background: ${C.graphite} !important; }
     this.menuIndex = Math.min(this.menuIndex, items.length - 1);
     if (this.zone === "menu") items[this.menuIndex].classList.add("stv-focus");
     if (this.zone === "player") this.playerEls[this.playerIndex].classList.add("stv-focus");
-    this.placeNeedle();
     this.drawRing();
-  };
-  SpotifyUI.prototype.placeNeedle = function() {
-    var target = this.zone === "menu" ? this.menuList()[this.menuIndex] : this.menuItems.filter(function(m) {
-      return m.classList.contains("stv-active");
-    })[0];
-    if (!target) {
-      this.needle.style.opacity = "0";
-      return;
-    }
-    this.needle.style.opacity = "1";
-    this.needle.style.transform = "translateX(" + target.offsetLeft + "px) scaleX(" + target.offsetWidth / 40 + ")";
-    this.needle.classList.toggle("stv-lit", this.zone === "menu");
   };
   SpotifyUI.prototype.drawRing = function() {
     if (!this.ring) return;
@@ -840,7 +823,6 @@ html, body { background: ${C.graphite} !important; }
     this.menuItems.forEach(function(m) {
       m.classList.toggle("stv-active", m.getAttribute("data-view") === cur);
     });
-    this.placeNeedle();
   };
   SpotifyUI.prototype.back = function() {
     var e = this.contentEl;
@@ -876,6 +858,11 @@ html, body { background: ${C.graphite} !important; }
     this._toastTimer = setTimeout(function() {
       self.toastEl.classList.remove("stv-show");
     }, 2600);
+  };
+  SpotifyUI.prototype.togglePlain = function() {
+    this.plain = !this.plain;
+    this.layout();
+    this.toast(this.plain ? "Impaginazione TV disattivata" : "Impaginazione TV attivata");
   };
   SpotifyUI.prototype.focusPlayer = function() {
     this.playerIndex = 2;
@@ -1011,9 +998,9 @@ html, body { background: ${C.graphite} !important; }
       diag.push((/* @__PURE__ */ new Date()).toTimeString().substr(0, 8) + " " + msg);
       if (diag.length > 60) diag.shift();
     }
-    d("boot v0.6.0 \u2014 " + location.href.substr(0, 60));
+    d("boot v0.7.0 \u2014 " + location.href.substr(0, 60));
     try {
-      if (window.self === window.top) document.title = "[v060] " + (document.title || "Spotify");
+      if (window.self === window.top) document.title = "[v070] " + (document.title || "Spotify");
     } catch (e) {
     }
     window.addEventListener("error", function(e) {
@@ -1022,7 +1009,7 @@ html, body { background: ${C.graphite} !important; }
     var top = window.self === window.top;
     var cfg = window.__spotifyTvConfig || {};
     window.__spotifyTv = {
-      version: "0.6.0",
+      version: "0.7.0",
       debug: true,
       log: diag,
       diag: function() {
@@ -1208,6 +1195,9 @@ html, body { background: ${C.graphite} !important; }
           case KEY.YELLOW:
             showDiag();
             break;
+          case KEY.GREEN:
+            window.__spotifyTvUi.togglePlain();
+            break;
           case KEY.RED:
             location.reload();
             break;
@@ -1258,8 +1248,31 @@ html, body { background: ${C.graphite} !important; }
         diagBox.style.display = "none";
         return;
       }
-      var lines = diag.slice(-16);
-      diagBox.textContent = "Spotify TV Mod " + window.__spotifyTv.version + "   (GIALLO chiude)\npagina: " + location.href.substr(0, 80) + "\n--- eventi ---\n" + lines.join("\n");
+      var lines = diag.slice(-12);
+      try {
+        var u2 = window.__spotifyTvUi;
+        var v = document.querySelector("[data-stv-view]");
+        var m = document.querySelector("main");
+        var rr = function(e) {
+          if (!e) return "-";
+          var r = e.getBoundingClientRect();
+          return Math.round(r.left) + "," + Math.round(r.top) + " " + Math.round(r.width) + "x" + Math.round(r.height);
+        };
+        lines = lines.concat([
+          "--- pagina ---",
+          "percorso: " + location.pathname + "   login: " + (document.querySelector('[data-testid="login-button"]') ? "no" : "s\xEC"),
+          "#main-view: " + (document.getElementById("main-view") ? "s\xEC" : "no") + "   <main>: " + rr(m),
+          "area contenuti: " + (v ? (v.id || v.tagName) + " " + rr(v) : "NON trovata") + "   layout: " + document.documentElement.classList.contains("stv-layout"),
+          "elementi navigabili: " + (u2 ? u2.contentTargets().length : "-") + "   zona: " + (u2 ? u2.zone : "-"),
+          "scroll: " + function() {
+            var sc = document.querySelector("[data-stv-view] [data-overlayscrollbars-viewport]");
+            return sc ? sc.scrollTop + "/" + sc.scrollHeight : "non trovato";
+          }()
+        ]);
+      } catch (e) {
+        lines.push("diag KO: " + e.message);
+      }
+      diagBox.textContent = "Spotify TV Mod " + window.__spotifyTv.version + "   (GIALLO chiude, VERDE = Spotify senza impaginazione)\npagina: " + location.href.substr(0, 80) + "\n--- eventi ---\n" + lines.join("\n");
       diagBox.style.display = "block";
     }
     window.__spotifyTv.showDiag = showDiag;

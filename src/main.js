@@ -24,11 +24,11 @@ import { startBasicNav } from './basicnav.js';
     diag.push(new Date().toTimeString().substr(0, 8) + ' ' + msg);
     if (diag.length > 60) diag.shift();
   }
-  d('boot v0.6.0 — ' + location.href.substr(0, 60));
+  d('boot v0.7.0 — ' + location.href.substr(0, 60));
 
   // Marcatore nel titolo: sulla TV si vede subito se il modulo nuovo gira.
   try {
-    if (window.self === window.top) document.title = '[v060] ' + (document.title || 'Spotify');
+    if (window.self === window.top) document.title = '[v070] ' + (document.title || 'Spotify');
   } catch (e) { }
   window.addEventListener('error', function (e) {
     d('ERRORE: ' + (e.message || '') + ' @ ' + (e.filename || '').split('/').pop() + ':' + e.lineno);
@@ -38,7 +38,7 @@ import { startBasicNav } from './basicnav.js';
   var cfg = (window.__spotifyTvConfig) || {};
 
   window.__spotifyTv = {
-    version: '0.6.0',
+    version: '0.7.0',
     debug: true,
     log: diag,
     diag: function () { return diag.join('\n'); },
@@ -152,6 +152,7 @@ import { startBasicNav } from './basicnav.js';
         case KEY.PREV: case KEY.RW: player.prev(); break;
         case KEY.BLUE: show(); focusPlayer(); break;
         case KEY.YELLOW: showDiag(); break;
+        case KEY.GREEN: window.__spotifyTvUi.togglePlain(); break;
         case KEY.RED: location.reload(); break;
         default: handled = false;
       }
@@ -183,8 +184,22 @@ import { startBasicNav } from './basicnav.js';
       document.body.appendChild(diagBox);
     }
     if (diagBox.style.display === 'block') { diagBox.style.display = 'none'; return; }
-    var lines = diag.slice(-16);
-    diagBox.textContent = 'Spotify TV Mod ' + window.__spotifyTv.version + '   (GIALLO chiude)\n' +
+    var lines = diag.slice(-12);
+    try {
+      var u = window.__spotifyTvUi;
+      var v = document.querySelector('[data-stv-view]');
+      var m = document.querySelector('main');
+      var rr = function (e) { if (!e) return '-'; var r = e.getBoundingClientRect(); return Math.round(r.left) + ',' + Math.round(r.top) + ' ' + Math.round(r.width) + 'x' + Math.round(r.height); };
+      lines = lines.concat([
+        '--- pagina ---',
+        'percorso: ' + location.pathname + '   login: ' + (document.querySelector('[data-testid="login-button"]') ? 'no' : 'sì'),
+        '#main-view: ' + (document.getElementById('main-view') ? 'sì' : 'no') + '   <main>: ' + rr(m),
+        'area contenuti: ' + (v ? (v.id || v.tagName) + ' ' + rr(v) : 'NON trovata') + '   layout: ' + document.documentElement.classList.contains('stv-layout'),
+        'elementi navigabili: ' + (u ? u.contentTargets().length : '-') + '   zona: ' + (u ? u.zone : '-'),
+        'scroll: ' + (function () { var sc = document.querySelector('[data-stv-view] [data-overlayscrollbars-viewport]'); return sc ? sc.scrollTop + '/' + sc.scrollHeight : 'non trovato'; })()
+      ]);
+    } catch (e) { lines.push('diag KO: ' + e.message); }
+    diagBox.textContent = 'Spotify TV Mod ' + window.__spotifyTv.version + '   (GIALLO chiude, VERDE = Spotify senza impaginazione)\n' +
       'pagina: ' + location.href.substr(0, 80) + '\n' +
       '--- eventi ---\n' + lines.join('\n');
     diagBox.style.display = 'block';

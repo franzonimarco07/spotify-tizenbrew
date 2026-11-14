@@ -95,3 +95,13 @@ Developer mode della TV 2: si attiva da App → `12345`. Per installare da Mac, 
   acciaio #9AA2B4, ambra #FFB547. Font Sora (Google Fonts).
 - Scorrimento verticale sul contenitore `#main-view [data-overlayscrollbars-viewport]`.
 - Lancetta ambra sotto il menu, scala di sintonia nel player e nella schermata di avvio.
+
+## 8. v0.7.0 — stile Spotify e impaginazione a prova di errore
+- Su richiesta dell'utente: colori e font di Spotify (#000/#121212/#1f1f1f, verde #1ed760, testo #fff/#b3b3b3,
+  `--encore-body-font-stack`), nessuna ricolorazione della pagina.
+- Sulla TV la v0.6 risultava vuota: l'area dei contenuti viene ora cercata a runtime (`#main-view`, altrimenti il
+  contenitore più esterno di `<main>` con la stessa misura) e marcata `[data-stv-view]`; le regole che nascondono
+  Spotify valgono solo con `html.stv-layout`, che si accende solo se l'area è stata trovata.
+- VERDE: alterna la nostra impaginazione e Spotify "nudo". GIALLO: diagnostica con area trovata, misure, login,
+  elementi navigabili, scroll.
+- Per aggiornare la TV usare il modulo legato al commit: `franzonimarco07/spotify-tizenbrew@<sha corto>`.
