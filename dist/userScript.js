@@ -1,5 +1,5 @@
-/* Spotify TV Mod for TizenBrew — v0.1 (test build)
- * Runs at document start inside open.spotify.com.
+/* Spotify TV Mod for TizenBrew — v0.2 (test build)
+ * Injected by TizenBrew into open.spotify.com (also into Spotify's "unsupported browser" page).
  *  1. Desktop Chrome user agent (Spotify blocks "SMART-TV; Tizen").
  *  2. Remote control: arrows = spatial navigation, OK = click, Back = back,
  *     media keys = player controls.
@@ -8,9 +8,10 @@
 (function () {
   'use strict';
   if (window.__spotifyTvMod) return;
-  window.__spotifyTvMod = { version: '0.1.0', log: [] };
+  window.__spotifyTvMod = { version: '0.2.0', log: [] };
 
-  var CHROME = '108.0.0.0';
+  // Spotify blocks Chrome <= 108 server side; the TV engine is Chromium 108.
+  var CHROME = '120.0.0.0';
   var UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/' + CHROME + ' Safari/537.36';
 
   function log(msg) {
@@ -21,11 +22,21 @@
   }
 
   // ---------- 1. User agent ----------
+  // The server checks the HTTP User-Agent, so the JS getters below are not enough:
+  // change it for the whole app, then reload once so the request carries it.
+  var tizenUa = 'no tizen API';
   try {
     if (window.tizen && tizen.websetting && tizen.websetting.setUserAgentString) {
       tizen.websetting.setUserAgentString(UA);
-    }
-  } catch (e) { /* not available for remote origins */ }
+      tizenUa = 'set';
+      if (document.title.indexOf('non supportato') !== -1 || /unsupported|non supportato/i.test(document.documentElement.innerHTML.substr(0, 20000))) {
+        if (!sessionStorage.getItem('stvmodReloaded')) {
+          sessionStorage.setItem('stvmodReloaded', '1');
+          location.replace('https://open.spotify.com/');
+        } else tizenUa = 'set, still blocked';
+      }
+    } else if (window.tizen) tizenUa = 'tizen present, no websetting';
+  } catch (e) { tizenUa = 'error: ' + e.message; }
 
   function defineGetter(obj, prop, value) {
     try {
@@ -211,6 +222,7 @@
     diagEl.textContent =
       'Spotify TV Mod ' + window.__spotifyTvMod.version + '   (BLU = nascondi, GIALLO = ricarica)\n' +
       'UA js: ' + navigator.userAgent.substr(0, 70) + '…\n' +
+      'tizen.websetting UA: ' + tizenUa + '\n' +
       'Widevine: ' + emeStatus + '\n' +
       'Media element: ' + (audio ? (audio.paused ? 'paused' : 'playing') + ' t=' + audio.currentTime.toFixed(1) : 'none') + '\n' +
       'URL: ' + location.pathname + '   last key: ' + lastKey + '\n' +
