@@ -950,6 +950,16 @@
     this.booted = false;
   }
   SpotifyUI.prototype.mount = function() {
+    var self0 = this;
+    function step(name, fn) {
+      try {
+        fn();
+      } catch (e) {
+        self0.mountErrors = self0.mountErrors || [];
+        self0.mountErrors.push(name + ": " + e.message);
+        if (window.console) console.warn("[spotify-tv] mount " + name, e);
+      }
+    }
     var style = el("style");
     style.textContent = CSS;
     document.head.appendChild(style);
@@ -975,10 +985,11 @@
     this.badge.style.display = "none";
     root.appendChild(this.badge);
     var self = this;
-    this.playBtn.addEventListener("click", function() {
+    if (this.playBtn) this.playBtn.addEventListener("click", function() {
       commands.togglePlay();
     });
-    root.querySelectorAll("[data-cmd]").forEach(function(b) {
+    var cmdEls = root.querySelectorAll("[data-cmd]") || [];
+    Array.prototype.forEach.call(cmdEls, function(b) {
       b.addEventListener("click", function() {
         var c = b.getAttribute("data-cmd");
         if (c === "next") commands.next();
@@ -989,12 +1000,25 @@
         if (c === "vol-down") commands.volume(-0.1);
       });
     });
-    this.buildMenu();
-    this.buildHero();
-    this.buildPlayerZone();
-    this.bindState();
-    this.focus(0, 0);
-    this.show();
+    step("menu", function() {
+      self.buildMenu();
+    });
+    step("hero", function() {
+      self.buildHero();
+    });
+    step("player", function() {
+      self.buildPlayerZone();
+    });
+    step("stato", function() {
+      self.bindState();
+    });
+    step("focus", function() {
+      self.focus(0, 0);
+    });
+    step("mostra", function() {
+      self.show();
+    });
+    this.mounted = true;
     setTimeout(function() {
       self.markLoaded();
     }, 400);
@@ -1002,10 +1026,12 @@
   SpotifyUI.prototype.buildMenu = function() {
     var self = this;
     var brand = this.root.querySelector(".stv-brand");
-    brand.setAttribute("data-view", "home");
-    brand.addEventListener("click", function() {
-      self.openView("home");
-    });
+    if (brand) {
+      brand.setAttribute("data-view", "home");
+      brand.addEventListener("click", function() {
+        self.openView("home");
+      });
+    }
     this.brand = brand;
     this.menuItems = VIEWS.map(function(v) {
       var it = el("div", "stv-menu-item", v.label);
@@ -1021,7 +1047,8 @@
     var self = this;
     var hero = el("div", "stv-hero");
     hero.innerHTML = '<p class="stv-hero-title">Spotify sulla TV</p><h1 class="stv-hero-big">La tua musica,<br>senza pubblicit\xE0.</h1><p class="stv-hero-sub">Usa le frecce per muoverti, OK per scegliere. I tasti play/pausa e traccia del telecomando funzionano sempre.</p><div class="stv-tiles">  <div class="stv-tile" data-view="home"><h3>Home</h3><p>I tuoi ascolti e i consigli di Spotify</p></div>  <div class="stv-tile" data-view="search"><h3>Cerca</h3><p>Brani, artisti, album, playlist</p></div>  <div class="stv-tile" data-view="library"><h3>La tua raccolta</h3><p>Playlist e brani salvati</p></div></div>';
-    hero.querySelectorAll("[data-view]").forEach(function(t) {
+    var heroTiles = hero.querySelectorAll("[data-view]") || [];
+    Array.prototype.forEach.call(heroTiles, function(t) {
       t.addEventListener("click", function() {
         self.openView(t.getAttribute("data-view"));
       });
@@ -1030,8 +1057,8 @@
     this.stage.appendChild(hero);
   };
   SpotifyUI.prototype.buildPlayerZone = function() {
-    this.playerEls = Array.prototype.slice.call(this.bottom.querySelectorAll(".stv-btn"));
-    this.playerEls.forEach(function(b, i) {
+    this.playerEls = Array.prototype.slice.call(this.bottom ? this.bottom.querySelectorAll(".stv-btn") : []);
+    (this.playerEls || []).forEach(function(b, i) {
       b.setAttribute("tabindex", "0");
       b.__zone = "player";
     });
@@ -1135,7 +1162,7 @@
       this.views[k].classList.toggle("stv-visible", k === id);
     }, this);
     this.hero.style.display = id === "home" && !this.frameMounted ? "block" : "none";
-    this.menuItems.forEach(function(it) {
+    (this.menuItems || []).forEach(function(it) {
       it.classList.toggle("stv-active", it.getAttribute("data-view") === id);
     });
     this.focus(1, 0);
@@ -1143,7 +1170,7 @@
   };
   SpotifyUI.prototype.zonesOf = function() {
     var z = [];
-    z.push([{ el: this.brand }].concat(this.menuItems.map(function(m) {
+    z.push((this.brand ? [{ el: this.brand }] : []).concat((this.menuItems || []).map(function(m) {
       return { el: m };
     })));
     if (!this.frameMounted && this.current === "home" && this.hero.style.display !== "none") {
@@ -1311,7 +1338,7 @@
     Object.keys(this.views).forEach(function(k) {
       this.views[k].classList.remove("stv-visible");
     }, this);
-    this.menuItems.forEach(function(it) {
+    (this.menuItems || []).forEach(function(it) {
       it.classList.toggle("stv-active", it.getAttribute("data-view") === "home");
     });
     this.focus(0, 0);
@@ -1350,12 +1377,24 @@
   // src/main.js
   (function boot() {
     if (window.__spotifyTv) return;
+    var diag = [];
+    function d(msg) {
+      diag.push((/* @__PURE__ */ new Date()).toTimeString().substr(0, 8) + " " + msg);
+      if (diag.length > 60) diag.shift();
+    }
+    d("boot v0.4.0 \u2014 " + location.href.substr(0, 60));
+    window.addEventListener("error", function(e) {
+      d("ERRORE: " + (e.message || "") + " @ " + (e.filename || "").split("/").pop() + ":" + e.lineno);
+    });
     var top = window.self === window.top;
     var cfg = window.__spotifyTvConfig || {};
     window.__spotifyTv = {
       version: "0.4.0",
-      debug: false,
-      log: [],
+      debug: true,
+      log: diag,
+      diag: function() {
+        return diag.join("\n");
+      },
       showUi: function() {
         if (ui) show();
       },
@@ -1419,15 +1458,33 @@
         setNetworkContext(cfg.network);
       } catch (e) {
       }
-      init();
+      try {
+        init();
+        d("motore no-ads avviato");
+      } catch (e) {
+        d("no-ads KO: " + e.message);
+      }
     }
     if (top) {
       try {
         init2();
+        d("player collegato");
       } catch (e) {
-        console.warn(e);
+        d("player KO: " + e.message);
       }
-      if (cfg.tvUi !== false) startUi();
+      if (cfg.tvUi !== false) {
+        try {
+          startUi();
+          var u = window.__spotifyTvUi;
+          if (!u) d("UI non montata (body assente?)");
+          else if (u.mountErrors && u.mountErrors.length) d("UI montata con errori: " + u.mountErrors.join(" | "));
+          else d("UI montata" + (u.mounted ? " e visibile" : " (in attesa del body)"));
+        } catch (e) {
+          d("UI KO: " + e.message + " @ " + (e.stack || "").split("\n")[1]);
+        }
+      }
+    } else {
+      d("sono in un iframe: niente UI");
     }
     var KEY = {
       LEFT: 37,
@@ -1523,8 +1580,7 @@
             toast(st.adBlocked ? "Pubblicit\xE0 bloccate: " + st.adBlocked : "Nessuna pubblicit\xE0 bloccata");
             break;
           case KEY.YELLOW:
-            window.__spotifyTv.debug = !window.__spotifyTv.debug;
-            toast("Debug " + (window.__spotifyTv.debug ? "on" : "off"));
+            showDiag();
             break;
           case KEY.RED:
             location.reload();
@@ -1551,6 +1607,9 @@
           case KEY.BLUE:
             show();
             break;
+          case KEY.YELLOW:
+            showDiag();
+            break;
           default:
             handled = false;
         }
@@ -1560,6 +1619,28 @@
         e.stopPropagation();
       }
     }, true);
+    var diagBox = null;
+    function showDiag() {
+      if (!document.body) return;
+      if (!diagBox) {
+        diagBox = document.createElement("div");
+        diagBox.id = "stv-diag";
+        diagBox.style.cssText = "position:fixed;left:2vw;right:2vw;bottom:2vh;max-height:70vh;overflow:hidden;pointer-events:none;z-index:2147483647;background:rgba(0,0,0,.94);color:#9ef;border:1px solid #1ed760;border-radius:10px;padding:14px 16px;font:13px/1.35 monospace;white-space:pre-wrap;";
+        document.body.appendChild(diagBox);
+      }
+      if (diagBox.style.display === "block") {
+        diagBox.style.display = "none";
+        return;
+      }
+      var lines = diag.slice(-16);
+      try {
+        lines = lines.concat(adLogLines().slice(-10));
+      } catch (e) {
+      }
+      diagBox.textContent = "Spotify TV Mod " + window.__spotifyTv.version + "   (GIALLO chiude)\npagina: " + location.href.substr(0, 80) + "\n--- eventi ---\n" + lines.join("\n");
+      diagBox.style.display = "block";
+    }
+    window.__spotifyTv.showDiag = showDiag;
     window.addEventListener("beforeunload", function() {
       window.__spotifyTvUi = null;
     });

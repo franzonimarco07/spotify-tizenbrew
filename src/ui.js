@@ -136,6 +136,15 @@ function SpotifyUI() {
 }
 
 SpotifyUI.prototype.mount = function () {
+  var self0 = this;
+  function step(name, fn) {
+    try { fn(); } catch (e) {
+      self0.mountErrors = self0.mountErrors || [];
+      self0.mountErrors.push(name + ': ' + e.message);
+      if (window.console) console.warn('[spotify-tv] mount ' + name, e);
+    }
+  }
+
   var style = el('style');
   style.textContent = CSS;
   document.head.appendChild(style);
@@ -187,8 +196,9 @@ SpotifyUI.prototype.mount = function () {
   root.appendChild(this.badge);
 
   var self = this;
-  this.playBtn.addEventListener('click', function () { commands.togglePlay(); });
-  root.querySelectorAll('[data-cmd]').forEach(function (b) {
+  if (this.playBtn) this.playBtn.addEventListener('click', function () { commands.togglePlay(); });
+  var cmdEls = root.querySelectorAll('[data-cmd]') || [];
+  Array.prototype.forEach.call(cmdEls, function (b) {
     b.addEventListener('click', function () {
       var c = b.getAttribute('data-cmd');
       if (c === 'next') commands.next();
@@ -200,12 +210,13 @@ SpotifyUI.prototype.mount = function () {
     });
   });
 
-  this.buildMenu();
-  this.buildHero();
-  this.buildPlayerZone();
-  this.bindState();
-  this.focus(0, 0);
-  this.show();
+  step('menu', function () { self.buildMenu(); });
+  step('hero', function () { self.buildHero(); });
+  step('player', function () { self.buildPlayerZone(); });
+  step('stato', function () { self.bindState(); });
+  step('focus', function () { self.focus(0, 0); });
+  step('mostra', function () { self.show(); });
+  this.mounted = true;
 
   // Primo caricamento: la shell è già visibile e animata, Spotify carica sotto.
   setTimeout(function () { self.markLoaded(); }, 400);
@@ -214,8 +225,10 @@ SpotifyUI.prototype.mount = function () {
 SpotifyUI.prototype.buildMenu = function () {
   var self = this;
   var brand = this.root.querySelector('.stv-brand');
-  brand.setAttribute('data-view', 'home');
-  brand.addEventListener('click', function () { self.openView('home'); });
+  if (brand) {
+    brand.setAttribute('data-view', 'home');
+    brand.addEventListener('click', function () { self.openView('home'); });
+  }
   this.brand = brand;
   this.menuItems = VIEWS.map(function (v) {
     var it = el('div', 'stv-menu-item', v.label);
@@ -238,7 +251,8 @@ SpotifyUI.prototype.buildHero = function () {
     '  <div class="stv-tile" data-view="search"><h3>Cerca</h3><p>Brani, artisti, album, playlist</p></div>' +
     '  <div class="stv-tile" data-view="library"><h3>La tua raccolta</h3><p>Playlist e brani salvati</p></div>' +
     '</div>';
-  hero.querySelectorAll('[data-view]').forEach(function (t) {
+  var heroTiles = hero.querySelectorAll('[data-view]') || [];
+  Array.prototype.forEach.call(heroTiles, function (t) {
     t.addEventListener('click', function () { self.openView(t.getAttribute('data-view')); });
   });
   this.hero = hero;
@@ -247,8 +261,8 @@ SpotifyUI.prototype.buildHero = function () {
 
 SpotifyUI.prototype.buildPlayerZone = function () {
   // La zona 1 è sempre il player: un "su" dalle viste ci porta lì.
-  this.playerEls = Array.prototype.slice.call(this.bottom.querySelectorAll('.stv-btn'));
-  this.playerEls.forEach(function (b, i) {
+  this.playerEls = Array.prototype.slice.call(this.bottom ? this.bottom.querySelectorAll('.stv-btn') : []);
+  (this.playerEls || []).forEach(function (b, i) {
     b.setAttribute('tabindex', '0');
     b.__zone = 'player';
   });
@@ -379,7 +393,7 @@ SpotifyUI.prototype.openView = function (id) {
 
   // Home: il riquadro "hero" è sopra la vista finché non si entra davvero.
   this.hero.style.display = id === 'home' && !this.frameMounted ? 'block' : 'none';
-  this.menuItems.forEach(function (it) {
+  (this.menuItems || []).forEach(function (it) {
     it.classList.toggle('stv-active', it.getAttribute('data-view') === id);
   });
   this.focus(1, 0);
@@ -391,7 +405,7 @@ SpotifyUI.prototype.zonesOf = function () {
   // Ordine di navigazione dall'alto verso il basso: menu, contenuto, player.
   // Il player è in fondo perché il telecomando deve arrivare prima ai contenuti.
   var z = [];
-  z.push([{ el: this.brand }].concat(this.menuItems.map(function (m) { return { el: m }; })));
+  z.push((this.brand ? [{ el: this.brand }] : []).concat((this.menuItems || []).map(function (m) { return { el: m }; })));
   if (!this.frameMounted && this.current === 'home' && this.hero.style.display !== 'none') {
     z.push(Array.prototype.slice.call(this.hero.querySelectorAll('.stv-tile')).map(function (t) { return { el: t }; }));
   } else if (this.current) {
@@ -554,7 +568,7 @@ SpotifyUI.prototype.goHome = function () {
   Object.keys(this.views).forEach(function (k) {
     this.views[k].classList.remove('stv-visible');
   }, this);
-  this.menuItems.forEach(function (it) {
+  (this.menuItems || []).forEach(function (it) {
     it.classList.toggle('stv-active', it.getAttribute('data-view') === 'home');
   });
   this.focus(0, 0);

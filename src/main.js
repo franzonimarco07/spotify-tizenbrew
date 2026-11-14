@@ -18,13 +18,26 @@ import { ui, show, hide, toast, focusPlayer } from './registry.js';
 (function boot() {
   if (window.__spotifyTv) return;
 
+  // Diagnostica sempre attiva e leggibile: la UI la mostra col tasto GIALLO.
+  // Serve a capire, dalla TV, se il modulo nuovo è arrivato e dove si ferma.
+  var diag = [];
+  function d(msg) {
+    diag.push(new Date().toTimeString().substr(0, 8) + ' ' + msg);
+    if (diag.length > 60) diag.shift();
+  }
+  d('boot v0.4.0 — ' + location.href.substr(0, 60));
+  window.addEventListener('error', function (e) {
+    d('ERRORE: ' + (e.message || '') + ' @ ' + (e.filename || '').split('/').pop() + ':' + e.lineno);
+  });
+
   var top = window.self === window.top;
   var cfg = (window.__spotifyTvConfig) || {};
 
   window.__spotifyTv = {
     version: '0.4.0',
-    debug: false,
-    log: [],
+    debug: true,
+    log: diag,
+    diag: function () { return diag.join('\n'); },
     showUi: function () { if (ui) show(); },
     hideUi: function () { if (ui) hide(); },
     focusPlayer: function () { focusPlayer(); },
@@ -70,13 +83,30 @@ import { ui, show, hide, toast, focusPlayer } from './registry.js';
   /* -------------------------------------------- 2. motore no-ads */
   if (cfg.noAds !== false) {
     try { noads.setNetworkContext(cfg.network); } catch (e) { }
-    noads.init();
+    try {
+      noads.init();
+      d('motore no-ads avviato');
+    } catch (e) {
+      d('no-ads KO: ' + e.message);
+    }
   }
 
   /* ------------------------------------------------- 3. UI e telecomando */
   if (top) {
-    try { player.init(); } catch (e) { console.warn(e); }
-    if (cfg.tvUi !== false) startUi();
+    try { player.init(); d('player collegato'); } catch (e) { d('player KO: ' + e.message); }
+    if (cfg.tvUi !== false) {
+      try {
+        startUi();
+        var u = window.__spotifyTvUi;
+        if (!u) d('UI non montata (body assente?)');
+        else if (u.mountErrors && u.mountErrors.length) d('UI montata con errori: ' + u.mountErrors.join(' | '));
+        else d('UI montata' + (u.mounted ? ' e visibile' : ' (in attesa del body)'));
+      } catch (e) {
+        d('UI KO: ' + e.message + ' @ ' + (e.stack || '').split('\n')[1]);
+      }
+    }
+  } else {
+    d('sono in un iframe: niente UI');
   }
 
   /* ---------------------------------------------------------- tasti */
@@ -118,7 +148,7 @@ import { ui, show, hide, toast, focusPlayer } from './registry.js';
         case KEY.PREV: case KEY.RW: player.prev(); break;
         case KEY.BLUE: show(); focusPlayer(); break;
         case KEY.GREEN: toast(st.adBlocked ? 'Pubblicità bloccate: ' + st.adBlocked : 'Nessuna pubblicità bloccata'); break;
-        case KEY.YELLOW: window.__spotifyTv.debug = !window.__spotifyTv.debug; toast('Debug ' + (window.__spotifyTv.debug ? 'on' : 'off')); break;
+        case KEY.YELLOW: showDiag(); break;
         case KEY.RED: location.reload(); break;
         default: handled = false;
       }
@@ -128,12 +158,36 @@ import { ui, show, hide, toast, focusPlayer } from './registry.js';
         case KEY.NEXT: case KEY.FF: player.next(); break;
         case KEY.PREV: case KEY.RW: player.prev(); break;
         case KEY.BLUE: show(); break;
+        case KEY.YELLOW: showDiag(); break;
         default: handled = false;
       }
     }
 
     if (handled) { e.preventDefault(); e.stopPropagation(); }
   }, true);
+
+  /* Diagnostica a schermo: elenco del modulo, errori, eventi del no-ads.
+   * Serve perché sulla TV non si vede la console. */
+  var diagBox = null;
+  function showDiag() {
+    if (!document.body) return;
+    if (!diagBox) {
+      diagBox = document.createElement('div');
+      diagBox.id = 'stv-diag';
+      diagBox.style.cssText = 'position:fixed;left:2vw;right:2vw;bottom:2vh;max-height:70vh;overflow:hidden;' +
+        'pointer-events:none;z-index:2147483647;background:rgba(0,0,0,.94);color:#9ef;border:1px solid #1ed760;border-radius:10px;' +
+        'padding:14px 16px;font:13px/1.35 monospace;white-space:pre-wrap;';
+      document.body.appendChild(diagBox);
+    }
+    if (diagBox.style.display === 'block') { diagBox.style.display = 'none'; return; }
+    var lines = diag.slice(-16);
+    try { lines = lines.concat(noads.adLogLines().slice(-10)); } catch (e) { }
+    diagBox.textContent = 'Spotify TV Mod ' + window.__spotifyTv.version + '   (GIALLO chiude)\n' +
+      'pagina: ' + location.href.substr(0, 80) + '\n' +
+      '--- eventi ---\n' + lines.join('\n');
+    diagBox.style.display = 'block';
+  }
+  window.__spotifyTv.showDiag = showDiag;
 
   // Se la pagina principale si ricarica, la UI va ricostruita.
   window.addEventListener('beforeunload', function () { window.__spotifyTvUi = null; });
