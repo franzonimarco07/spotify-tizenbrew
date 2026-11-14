@@ -244,7 +244,7 @@ SpotifyUI.prototype.buildHero = function () {
   var hero = el('div', 'stv-hero');
   hero.innerHTML =
     '<p class="stv-hero-title">Spotify sulla TV</p>' +
-    '<h1 class="stv-hero-big">La tua musica,<br>senza pubblicità.</h1>' +
+    '<h1 class="stv-hero-big">La tua musica,<br>sul grande schermo.</h1>' +
     '<p class="stv-hero-sub">Usa le frecce per muoverti, OK per scegliere. I tasti play/pausa e traccia del telecomando funzionano sempre.</p>' +
     '<div class="stv-tiles">' +
     '  <div class="stv-tile" data-view="home"><h3>Home</h3><p>I tuoi ascolti e i consigli di Spotify</p></div>' +
@@ -298,14 +298,6 @@ SpotifyUI.prototype.bindState = function () {
   on('ad', function (isAd) {
     self.badge.style.display = isAd ? 'block' : 'none';
     self.badge.textContent = 'Pubblicità in corso…';
-  });
-
-  on('adblocked', function (n) {
-    self.badge.style.display = 'block';
-    self.badge.textContent = 'Pubblicità bloccate: ' + n;
-    setTimeout(function () {
-      if (!st.ad) self.badge.style.display = 'none';
-    }, 2600);
   });
 
   on('progress', function (p) {

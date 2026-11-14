@@ -2,7 +2,6 @@
  * La UI non legge il DOM di Spotify (fragile e lento): ascolta questi eventi,
  * che arrivano da tre sorgenti indipendenti:
  *   - il cluster del WebSocket (metadati, stato, posizione, brano corrente);
- *   - il motore no-ads (stato dedotto dalla state machine);
  *   - un <audio> "spia" per la posizione reale del playback.
  */
 'use strict';
@@ -16,7 +15,6 @@ export var st = {
   duration: 0,
   volume: 1,
   ad: false,
-  adBlocked: 0,
   ready: false
 };
 

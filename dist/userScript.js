@@ -1,6 +1,4 @@
-/* Spotify TV Mod v0.4.1 — motore no-ads + UI TV per il web player di Spotify.
- * Modulo TizenBrew. Le parti di blocco delle pubblicità derivano da
- * T-64/spotify-ad-skip e tomer8007/spotify-web-ads-remover (GPL-3.0). */
+/* Spotify TV Mod v0.5.0 — UI TV per il web player di Spotify. Modulo TizenBrew. */
 "use strict";
 (() => {
   var __defProp = Object.defineProperty;
@@ -48,7 +46,6 @@
     duration: 0,
     volume: 1,
     ad: false,
-    adBlocked: 0,
     ready: false
   };
   function setTrack(t) {
@@ -77,31 +74,12 @@
     st.ad = on2;
     emit("ad", on2);
   }
-  function trackFromMetadata(md) {
-    if (!md) return null;
-    var artists = md.artist_name || md.artists || "";
-    if (Array.isArray(artists)) artists = artists.join(", ");
-    return {
-      uri: md.uri || "",
-      name: md.name || md.title || "",
-      artists,
-      album: md.album_title || md.album_name || md.album || "",
-      art: pickImage(md.image_url || md.image_large_url || md.cover_art || ""),
-      duration: md.duration ? Math.round(md.duration / 1e3) : 0
-    };
-  }
-  function pickImage(u) {
-    if (!u) return "";
-    if (/^https?:/.test(u)) return u.replace(/^http:/, "https:");
-    if (u.indexOf("spotify:image:") === 0) return "https://i.scdn.co/image/" + u.split(":")[2];
-    return u;
-  }
 
   // src/player.js
   var player_exports = {};
   __export(player_exports, {
     back: () => back,
-    init: () => init2,
+    init: () => init,
     navigate: () => navigate,
     next: () => next,
     pollDomState: () => pollDomState,
@@ -112,568 +90,6 @@
     togglePlay: () => togglePlay,
     volumeDelta: () => volumeDelta
   });
-
-  // src/noads.js
-  var noads_exports = {};
-  __export(noads_exports, {
-    adLog: () => adLog,
-    adLogLines: () => adLogLines,
-    fetchOriginal: () => fetchOriginal,
-    init: () => init,
-    installMediaHooks: () => installMediaHooks,
-    manipulateForTest: () => manipulateForTest,
-    networkContext: () => networkContext,
-    setNetworkContext: () => setNetworkContext,
-    startAdWatcher: () => startAdWatcher
-  });
-  var LOG_MAX = 120;
-  var logLines = [];
-  var bootCtx = null;
-  function setNetworkContext(c) {
-    bootCtx = c;
-  }
-  function adLog(msg) {
-    var line = (/* @__PURE__ */ new Date()).toTimeString().substr(0, 8) + " " + msg;
-    logLines.push(line);
-    if (logLines.length > LOG_MAX) logLines.shift();
-    if (window.__spotifyTv && window.__spotifyTv.debug) console.log("[noads]", msg);
-    emit("noadslog", line);
-  }
-  function adLogLines() {
-    return logLines.slice();
-  }
-  function Queue(timeoutMs) {
-    this.items = [];
-    this.busy = false;
-    this.timeoutMs = timeoutMs;
-  }
-  Queue.prototype.push = function(fn, fallback) {
-    var self = this;
-    return new Promise(function(resolve) {
-      self.items.push({ fn, fallback, resolve });
-      self.next();
-    });
-  };
-  Queue.prototype.next = function() {
-    if (this.busy) return;
-    var item = this.items.shift();
-    if (!item) return;
-    var self = this;
-    var done = false;
-    var timer = setTimeout(function() {
-      if (done) return;
-      done = true;
-      adLog("coda in timeout, passo avanti");
-      try {
-        item.resolve(item.fallback ? item.fallback() : null);
-      } catch (e) {
-        item.resolve(null);
-      }
-      self.busy = false;
-      self.next();
-    }, this.timeoutMs);
-    this.busy = true;
-    Promise.resolve().then(item.fn).then(function(v) {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      item.resolve(v);
-      self.busy = false;
-      self.next();
-    }, function(e) {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      adLog("errore: " + (e && e.message || e));
-      try {
-        item.resolve(item.fallback ? item.fallback() : null);
-      } catch (x) {
-        item.resolve(null);
-      }
-      self.busy = false;
-      self.next();
-    });
-  };
-  var queue = new Queue(8e3);
-  var ctx = bootCtx || {
-    deviceId: "",
-    authorization: "",
-    clientToken: "",
-    accessToken: ""
-  };
-  function networkContext() {
-    return ctx;
-  }
-  var origFetch = window.fetch;
-  var origOpen = XMLHttpRequest.prototype.open;
-  var origSend = XMLHttpRequest.prototype.send;
-  var origSetHeader = XMLHttpRequest.prototype.setRequestHeader;
-  function fetchOriginal(url, init3) {
-    return origFetch.call(window, url, init3);
-  }
-  function parseJson(text) {
-    try {
-      return JSON.parse(text);
-    } catch (e) {
-      return null;
-    }
-  }
-  function patchBody(body) {
-    var data = parseJson(body);
-    if (!data) return body;
-    var ref = data.state_ref;
-    if (ref && typeof ref.state_id === "string" && ref.state_id.indexOf("future_") !== -1) {
-      var parts = ref.state_id.split("+");
-      ref.state_machine_id = parts[1];
-      ref.state_id = parts[2];
-      adLog('richiesta stato "future" normalizzata');
-      return JSON.stringify(data);
-    }
-    return body;
-  }
-  window.fetch = function(input, init3) {
-    try {
-      var url = typeof input === "string" ? input : input && input.url || "";
-      if (!init3) init3 = {};
-      if (init3.headers) {
-        var h = init3.headers;
-        if (h.get) {
-          if (h.get("authorization")) ctx.authorization = h.get("authorization");
-          if (h.get("client-token")) ctx.clientToken = h.get("client-token");
-        } else {
-          if (h.authorization) ctx.authorization = h.authorization;
-          if (h["authorization"]) ctx.authorization = h["authorization"];
-          if (h["client-token"]) ctx.clientToken = h["client-token"];
-        }
-      }
-      if (url.indexOf("/state") !== -1 && init3.body) {
-        init3 = Object.assign({}, init3, { body: patchBody(init3.body) });
-        return origFetch.call(window, input, init3).then(function(res) {
-          if (!res.ok || res.status === 204) return res;
-          return rewriteStateResponse(res);
-        });
-      }
-      if (url.indexOf("/devices") !== -1 && init3.body) {
-        var d = parseJson(init3.body);
-        if (d && d.device && d.device.device_id) ctx.deviceId = d.device.device_id;
-        return origFetch.call(window, input, init3);
-      }
-      if (url.indexOf("get_access_token") !== -1) {
-        return origFetch.call(window, input, init3).then(function(res) {
-          try {
-            res.clone().json().then(function(j) {
-              if (j && j.accessToken) ctx.accessToken = j.accessToken;
-            }).catch(function() {
-            });
-          } catch (e) {
-          }
-          return res;
-        });
-      }
-      return origFetch.call(window, input, init3);
-    } catch (e) {
-      adLog("hook fetch: " + e.message);
-      return origFetch.call(window, input, init3);
-    }
-  };
-  XMLHttpRequest.prototype.open = function(method, url) {
-    this.__stvUrl = String(url || "");
-    return origOpen.apply(this, arguments);
-  };
-  XMLHttpRequest.prototype.setRequestHeader = function(name, value) {
-    try {
-      var n = String(name).toLowerCase();
-      if (n === "authorization") ctx.authorization = value;
-      if (n === "client-token") ctx.clientToken = value;
-    } catch (e) {
-    }
-    return origSetHeader.apply(this, arguments);
-  };
-  XMLHttpRequest.prototype.send = function(body) {
-    var xhr = this;
-    try {
-      var url = xhr.__stvUrl || "";
-      if (url.indexOf("/state") !== -1 && body) {
-        body = patchBody(body);
-        if (xhr.responseType === "" || xhr.responseType === "text") {
-          xhr.addEventListener("readystatechange", function() {
-            if (xhr.readyState !== 4 || xhr.status !== 200) return;
-            try {
-              var data = parseJson(xhr.responseText);
-              if (!data) return;
-              var out = transformPayload(data);
-              if (!out) return;
-              Object.defineProperty(xhr, "responseText", { value: JSON.stringify(out), configurable: true });
-              Object.defineProperty(xhr, "response", { value: JSON.stringify(out), configurable: true });
-            } catch (e) {
-            }
-          });
-        }
-      } else if (url.indexOf("/devices") !== -1 && body) {
-        var d = parseJson(body);
-        if (d && d.device && d.device.device_id) ctx.deviceId = d.device.device_id;
-      }
-    } catch (e) {
-    }
-    return origSend.call(this, body);
-  };
-  function rewriteStateResponse(res) {
-    var status = res.status;
-    var statusText = res.statusText;
-    var headers = res.headers;
-    return res.clone().text().then(function(text) {
-      var data = parseJson(text);
-      if (!data) return res;
-      return queue.push(function() {
-        var out = transformPayload(data);
-        return out ? JSON.stringify(out) : text;
-      }, function() {
-        return text;
-      }).then(function(body) {
-        var h = new Headers(headers);
-        h.delete("content-length");
-        h.delete("content-encoding");
-        var out = new Response(body, { status, statusText, headers: h });
-        Object.defineProperty(out, "url", { value: res.url });
-        Object.defineProperty(out, "redirected", { value: res.redirected });
-        Object.defineProperty(out, "type", { value: res.type });
-        return out;
-      });
-    }).catch(function(e) {
-      adLog("risposta /state non riscritta: " + e.message);
-      return res;
-    });
-  }
-  var NativeWS = window.WebSocket;
-  function MutableMessageEvent(o) {
-    this.type = o.type || "message";
-    this.data = o.data || null;
-    this.origin = o.origin || "";
-    this.lastEventId = o.lastEventId || "";
-    this.source = o.source || null;
-    this.ports = o.ports || [];
-    this.bubbles = o.bubbles || false;
-    this.cancelable = o.cancelable || false;
-    this.timeStamp = o.timeStamp || Date.now();
-  }
-  MutableMessageEvent.prototype = Object.create(MessageEvent.prototype);
-  MutableMessageEvent.prototype.constructor = MutableMessageEvent;
-  var sockets = [];
-  function HookedWS(url, protocols) {
-    var ws = protocols ? new NativeWS(url, protocols) : new NativeWS(url);
-    sockets.push(ws);
-    adLog("websocket aperto: " + String(url).split("?")[0]);
-    var onmessageFn = null;
-    Object.defineProperty(ws, "onmessage", {
-      configurable: true,
-      get: function() {
-        return onmessageFn;
-      },
-      set: function(fn) {
-        onmessageFn = fn;
-      }
-    });
-    var opened = false;
-    ws.addEventListener("open", function() {
-      opened = true;
-    });
-    ws.addEventListener("message", function(event) {
-      if (!onmessageFn) return;
-      var payload = event.data;
-      if (typeof payload !== "string" || payload.indexOf('"payloads"') === -1) {
-        onmessageFn.call(ws, event);
-        return;
-      }
-      queue.push(function() {
-        return handleWsPayload(payload);
-      }, function() {
-        return null;
-      }).then(function(out) {
-        var ev = event;
-        if (out) ev = new MutableMessageEvent({ type: "message", data: out, origin: event.origin });
-        try {
-          onmessageFn.call(ws, ev);
-        } catch (e) {
-          adLog("onmessage: " + e.message);
-        }
-      });
-    });
-    var onerrorFn = null;
-    Object.defineProperty(ws, "onerror", {
-      configurable: true,
-      get: function() {
-        return onerrorFn;
-      },
-      set: function(fn) {
-        onerrorFn = fn;
-      }
-    });
-    ws.addEventListener("error", function(event) {
-      if (opened) return;
-      if (onerrorFn) onerrorFn.call(ws, event);
-    });
-    return ws;
-  }
-  HookedWS.prototype = NativeWS.prototype;
-  Object.setPrototypeOf(HookedWS, NativeWS);
-  Object.defineProperty(HookedWS, "OPEN", { value: 1 });
-  Object.defineProperty(HookedWS, "CLOSED", { value: 3 });
-  Object.defineProperty(HookedWS, "CONNECTING", { value: 0 });
-  Object.defineProperty(HookedWS, "CLOSING", { value: 2 });
-  window.WebSocket = HookedWS;
-  function handleWsPayload(raw) {
-    var data = parseJson(raw);
-    if (!data || !data.payloads) return null;
-    var changed = false;
-    for (var i = 0; i < data.payloads.length; i++) {
-      var p = data.payloads[i];
-      if (!p) continue;
-      if (p.type === "replace_state" && p.state_machine && p.state_ref) {
-        p.state_machine = manipulateStateMachine(p.state_machine, p.state_ref.state_index, true);
-        changed = true;
-        continue;
-      }
-      if (p.cluster) {
-        readCluster(p.cluster);
-        var ps = p.cluster.player_state;
-        if (ps && ps.track && ps.track.provider === "ads/inject_tracks") {
-          adLog("ad iniettato bloccato (advertiser: " + (ps.track.metadata && ps.track.metadata.advertiser) + ")");
-          setAd(true);
-          p.cluster.player_state.track = null;
-          changed = true;
-          bumpCounter();
-        }
-      }
-    }
-    return changed ? JSON.stringify(data) : null;
-  }
-  function readCluster(cluster) {
-    try {
-      var ps = cluster.player_state;
-      if (!ps) return;
-      var pos = ps.position_as_of_timestamp;
-      if (isFinite(pos)) {
-        var ts = ps.timestamp || cluster.timestamp;
-        var since = ts && !ps.is_paused ? Math.max(0, Date.now() - ts) : 0;
-        emit("cluster_position", { position: (pos + since) / 1e3, paused: !!ps.is_paused });
-      }
-      if (ps.track && ps.track.metadata) {
-        var uri = ps.track.metadata.uri || "";
-        var isAd = uri.indexOf(":ad:") !== -1 || ps.track.provider === "ads/inject_tracks" || (ps.track.content_type || "").toUpperCase() === "AD";
-        if (isAd) {
-          setAd(true);
-        } else {
-          setAd(false);
-          var t = trackFromMetadata(ps.track.metadata);
-          if (t && (!st.track || st.track.uri !== t.uri || st.track.name !== t.name)) {
-            setTrack(t);
-            adLog("brano: " + t.name + " \u2014 " + t.artists);
-          }
-        }
-      }
-    } catch (e) {
-    }
-  }
-  function trackOf(sm, state) {
-    if (!state || !sm.tracks) return null;
-    var id = state.track;
-    return sm.tracks[id] || null;
-  }
-  function isAdState(sm, state) {
-    if (!state) return false;
-    if (typeof state.state_id === "string" && state.state_id.indexOf("filler") !== -1) return false;
-    var t = trackOf(sm, state);
-    if (!t) return false;
-    var uri = t.metadata && t.metadata.uri || "";
-    if (uri.indexOf(":ad:") !== -1) return true;
-    if ((t.content_type || "").toUpperCase() === "AD") return true;
-    return false;
-  }
-  function nextIndex(sm, index, key) {
-    var state = sm.states && sm.states[index];
-    if (!state || !state.transitions) return -1;
-    var tr = state.transitions[key || "advance"];
-    if (!tr || tr.state_index == null) return -1;
-    return tr.state_index;
-  }
-  function nextAdFreeIndex(sm, startIndex) {
-    var i = nextIndex(sm, startIndex, "advance");
-    var guard = 0;
-    while (i >= 0 && isAdState(sm, sm.states[i]) && guard++ < 8) {
-      i = nextIndex(sm, i, "advance");
-    }
-    return i;
-  }
-  var totalBlocked = 0;
-  function bumpCounter() {
-    totalBlocked++;
-    st.adBlocked = totalBlocked;
-    emit("adblocked", totalBlocked);
-  }
-  function manipulateStateMachine(sm, startIndex, replacing) {
-    if (!sm || !sm.states || startIndex == null) return sm;
-    var blocked = 0;
-    var maxPasses = 3;
-    for (var pass = 0; pass < maxPasses; pass++) {
-      var removed = false;
-      for (var i = 0; i < sm.states.length; i++) {
-        var state = sm.states[i];
-        if (!isAdState(sm, state)) continue;
-        var uri = (trackOf(sm, state).metadata || {}).uri || "";
-        var target = nextAdFreeIndex(sm, i);
-        if (target >= 0) {
-          sm.states[i] = sm.states[target];
-          removed = true;
-          blocked++;
-          adLog("ad saltato: " + uri);
-        } else {
-          shorten(sm, state);
-          removed = true;
-          blocked++;
-          adLog("ad accorciato: " + uri);
-        }
-      }
-      if (!removed) break;
-    }
-    if (blocked) {
-      totalBlocked += blocked;
-      st.adBlocked = totalBlocked;
-      emit("adblocked", totalBlocked);
-      if (replacing) setAd(false);
-    }
-    if (sm.tracks) {
-      for (var j = 0; j < sm.tracks.length; j++) {
-        var t = sm.tracks[j];
-        if (t && (t.metadata || {}).uri && String(t.metadata.uri).indexOf(":ad:") !== -1) sm.tracks[j] = null;
-      }
-    }
-    return sm;
-  }
-  function shorten(sm, state) {
-    var t = trackOf(sm, state);
-    var duration = t && t.metadata && t.metadata.duration || 3e4;
-    state.disallow_seeking = false;
-    state.restrictions = {};
-    state.initial_playback_position = duration;
-    state.position_offset = duration;
-  }
-  function transformPayload(data) {
-    try {
-      if (data.commands) {
-        var keys = Object.keys(data.commands);
-        for (var i = 0; i < keys.length; i++) {
-          var cmd = data.commands[keys[i]];
-          if (cmd && cmd.state_machine && cmd.state_ref) {
-            cmd.state_machine = manipulateStateMachine(cmd.state_machine, cmd.state_ref.state_index, false);
-          }
-        }
-        return data;
-      }
-      if (data.state_machine && data.updated_state_ref) {
-        data.state_machine = manipulateStateMachine(data.state_machine, data.updated_state_ref.state_index, false);
-        return data;
-      }
-      return null;
-    } catch (e) {
-      adLog("state machine: " + e.message);
-      return null;
-    }
-  }
-  var AD_UI = '[data-testid="ad-companion-card"], [data-testid="ad-slot-container"], [data-testid="ad-billboard"], [data-testid="context-item-info-ad-subtitle"], [aria-label="Advertisement"], [aria-label="Pubblicit\xE0"]';
-  var adUiSeen = false;
-  function checkDomForAd() {
-    var el2 = document.querySelector(AD_UI);
-    if (el2) {
-      if (!adUiSeen) adLog("ad rilevato dal DOM");
-      adUiSeen = true;
-      setAd(true);
-      muteAdAudio(true);
-      try {
-        el2.style.display = "none";
-      } catch (e) {
-      }
-      return;
-    }
-    if (adUiSeen) {
-      adUiSeen = false;
-      muteAdAudio(false);
-      if (!st.track || !st.playing) setAd(false);
-    }
-  }
-  var mediaEls = [];
-  function watchMedia(el2) {
-    if (!el2 || mediaEls.indexOf(el2) !== -1) return;
-    mediaEls.push(el2);
-    adLog("elemento audio trovato");
-    el2.addEventListener("timeupdate", function() {
-      if (!adUiSeen) emit("media_position", el2.currentTime);
-    });
-    el2.addEventListener("play", function() {
-      emit("media_playing", true);
-    });
-    el2.addEventListener("pause", function() {
-      emit("media_playing", false);
-    });
-    el2.addEventListener("durationchange", function() {
-      emit("media_duration", el2.duration);
-    });
-  }
-  function muteAdAudio(on2) {
-    mediaEls.forEach(function(el2) {
-      try {
-        if (on2) {
-          el2.__stvVol = el2.volume;
-          el2.volume = 0;
-        } else if (el2.__stvVol != null) {
-          el2.volume = el2.__stvVol;
-          el2.__stvVol = null;
-        }
-      } catch (e) {
-      }
-    });
-  }
-  function installMediaHooks() {
-    try {
-      var origPlay = HTMLMediaElement.prototype.play;
-      HTMLMediaElement.prototype.play = function() {
-        try {
-          watchMedia(this);
-        } catch (e) {
-        }
-        return origPlay.apply(this, arguments);
-      };
-    } catch (e) {
-    }
-    try {
-      var origCreate = Document.prototype.createElement;
-      Document.prototype.createElement = function(tag) {
-        var el2 = origCreate.apply(this, arguments);
-        try {
-          if (String(tag).toLowerCase() === "audio") watchMedia(el2);
-        } catch (e) {
-        }
-        return el2;
-      };
-    } catch (e) {
-    }
-    setInterval(function() {
-      var el2 = document.querySelector("audio, video");
-      if (el2) watchMedia(el2);
-    }, 2e3);
-  }
-  function startAdWatcher() {
-    setInterval(checkDomForAd, 700);
-  }
-  function manipulateForTest(sm, index) {
-    return manipulateStateMachine(sm, index == null ? 0 : index, false);
-  }
-  function init() {
-    adLog("motore no-ads attivo");
-    installMediaHooks();
-    startAdWatcher();
-  }
-
-  // src/player.js
   function q(sel) {
     return document.querySelector(sel);
   }
@@ -717,7 +133,7 @@
         return;
       }
     }
-    adLog("barra di avanzamento non trovata");
+    if (window.console) console.warn("[spotify-tv] barra di avanzamento non trovata");
   }
   function seekTo(ratio) {
     if (!st.duration) return;
@@ -776,7 +192,7 @@
     } catch (e) {
     }
   }
-  function init2() {
+  function init() {
     on("cluster_position", function(p) {
       setPosition(p.position);
       setPlaying(!p.paused);
@@ -814,9 +230,6 @@
   }
   function hide() {
     return call("hide");
-  }
-  function toast(msg) {
-    return call("toast", msg);
   }
   function focusPlayer() {
     return call("focusPlayer");
@@ -1046,7 +459,7 @@
   SpotifyUI.prototype.buildHero = function() {
     var self = this;
     var hero = el("div", "stv-hero");
-    hero.innerHTML = '<p class="stv-hero-title">Spotify sulla TV</p><h1 class="stv-hero-big">La tua musica,<br>senza pubblicit\xE0.</h1><p class="stv-hero-sub">Usa le frecce per muoverti, OK per scegliere. I tasti play/pausa e traccia del telecomando funzionano sempre.</p><div class="stv-tiles">  <div class="stv-tile" data-view="home"><h3>Home</h3><p>I tuoi ascolti e i consigli di Spotify</p></div>  <div class="stv-tile" data-view="search"><h3>Cerca</h3><p>Brani, artisti, album, playlist</p></div>  <div class="stv-tile" data-view="library"><h3>La tua raccolta</h3><p>Playlist e brani salvati</p></div></div>';
+    hero.innerHTML = '<p class="stv-hero-title">Spotify sulla TV</p><h1 class="stv-hero-big">La tua musica,<br>sul grande schermo.</h1><p class="stv-hero-sub">Usa le frecce per muoverti, OK per scegliere. I tasti play/pausa e traccia del telecomando funzionano sempre.</p><div class="stv-tiles">  <div class="stv-tile" data-view="home"><h3>Home</h3><p>I tuoi ascolti e i consigli di Spotify</p></div>  <div class="stv-tile" data-view="search"><h3>Cerca</h3><p>Brani, artisti, album, playlist</p></div>  <div class="stv-tile" data-view="library"><h3>La tua raccolta</h3><p>Playlist e brani salvati</p></div></div>';
     var heroTiles = hero.querySelectorAll("[data-view]") || [];
     Array.prototype.forEach.call(heroTiles, function(t) {
       t.addEventListener("click", function() {
@@ -1089,13 +502,6 @@
     on("ad", function(isAd) {
       self.badge.style.display = isAd ? "block" : "none";
       self.badge.textContent = "Pubblicit\xE0 in corso\u2026";
-    });
-    on("adblocked", function(n) {
-      self.badge.style.display = "block";
-      self.badge.textContent = "Pubblicit\xE0 bloccate: " + n;
-      setTimeout(function() {
-        if (!st.ad) self.badge.style.display = "none";
-      }, 2600);
     });
     on("progress", function(p) {
       self.loadbar.style.width = Math.round(p * 100) + "%";
@@ -1382,9 +788,9 @@
       diag.push((/* @__PURE__ */ new Date()).toTimeString().substr(0, 8) + " " + msg);
       if (diag.length > 60) diag.shift();
     }
-    d("boot v0.4.1 \u2014 " + location.href.substr(0, 60));
+    d("boot v0.5.0 \u2014 " + location.href.substr(0, 60));
     try {
-      if (window.self === window.top) document.title = "[v041] " + (document.title || "Spotify");
+      if (window.self === window.top) document.title = "[v050] " + (document.title || "Spotify");
     } catch (e) {
     }
     window.addEventListener("error", function(e) {
@@ -1393,7 +799,7 @@
     var top = window.self === window.top;
     var cfg = window.__spotifyTvConfig || {};
     window.__spotifyTv = {
-      version: "0.4.1",
+      version: "0.5.0",
       debug: true,
       log: diag,
       diag: function() {
@@ -1408,7 +814,6 @@
       focusPlayer: function() {
         focusPlayer();
       },
-      noads: noads_exports,
       commands: player_exports
     };
     var CHROME = "120.0.0.0";
@@ -1457,21 +862,9 @@
         }
       });
     }
-    if (cfg.noAds !== false) {
-      try {
-        setNetworkContext(cfg.network);
-      } catch (e) {
-      }
-      try {
-        init();
-        d("motore no-ads avviato");
-      } catch (e) {
-        d("no-ads KO: " + e.message);
-      }
-    }
     if (top) {
       try {
-        init2();
+        init();
         d("player collegato");
       } catch (e) {
         d("player KO: " + e.message);
@@ -1580,9 +973,6 @@
             show();
             focusPlayer();
             break;
-          case KEY.GREEN:
-            toast(st.adBlocked ? "Pubblicit\xE0 bloccate: " + st.adBlocked : "Nessuna pubblicit\xE0 bloccata");
-            break;
           case KEY.YELLOW:
             showDiag();
             break;
@@ -1637,10 +1027,6 @@
         return;
       }
       var lines = diag.slice(-16);
-      try {
-        lines = lines.concat(adLogLines().slice(-10));
-      } catch (e) {
-      }
       diagBox.textContent = "Spotify TV Mod " + window.__spotifyTv.version + "   (GIALLO chiude)\npagina: " + location.href.substr(0, 80) + "\n--- eventi ---\n" + lines.join("\n");
       diagBox.style.display = "block";
     }

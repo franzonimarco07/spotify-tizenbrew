@@ -2,16 +2,14 @@
  *
  * Ordine dei compiti, dal più urgente al meno:
  *  1. far credere a Spotify di essere su un browser desktop (l'UA lato HTTP lo
- *     imposta il service file, qui sistemiamo quello lato JavaScript);
- *  2. avviare il motore no-ads prima che il player faccia la prima richiesta;
- *  3. costruire la UI televisiva e mappare i tasti del telecomando.
+ *     lo controlla il server, qui sistemiamo quello lato JavaScript);
+ *  2. costruire la UI televisiva e mappare i tasti del telecomando.
  */
 'use strict';
 
 import { startUi } from './ui.js';
 import { on, emit } from './bus.js';
 import { st } from './state.js';
-import * as noads from './noads.js';
 import * as player from './player.js';
 import { ui, show, hide, toast, focusPlayer } from './registry.js';
 
@@ -25,11 +23,11 @@ import { ui, show, hide, toast, focusPlayer } from './registry.js';
     diag.push(new Date().toTimeString().substr(0, 8) + ' ' + msg);
     if (diag.length > 60) diag.shift();
   }
-  d('boot v0.4.1 — ' + location.href.substr(0, 60));
+  d('boot v0.5.0 — ' + location.href.substr(0, 60));
 
   // Marcatore nel titolo: sulla TV si vede subito se il modulo nuovo gira.
   try {
-    if (window.self === window.top) document.title = '[v041] ' + (document.title || 'Spotify');
+    if (window.self === window.top) document.title = '[v050] ' + (document.title || 'Spotify');
   } catch (e) { }
   window.addEventListener('error', function (e) {
     d('ERRORE: ' + (e.message || '') + ' @ ' + (e.filename || '').split('/').pop() + ':' + e.lineno);
@@ -39,14 +37,13 @@ import { ui, show, hide, toast, focusPlayer } from './registry.js';
   var cfg = (window.__spotifyTvConfig) || {};
 
   window.__spotifyTv = {
-    version: '0.4.1',
+    version: '0.5.0',
     debug: true,
     log: diag,
     diag: function () { return diag.join('\n'); },
     showUi: function () { if (ui) show(); },
     hideUi: function () { if (ui) hide(); },
     focusPlayer: function () { focusPlayer(); },
-    noads: noads,
     commands: player
   };
 
@@ -85,18 +82,7 @@ import { ui, show, hide, toast, focusPlayer } from './registry.js';
     });
   }
 
-  /* -------------------------------------------- 2. motore no-ads */
-  if (cfg.noAds !== false) {
-    try { noads.setNetworkContext(cfg.network); } catch (e) { }
-    try {
-      noads.init();
-      d('motore no-ads avviato');
-    } catch (e) {
-      d('no-ads KO: ' + e.message);
-    }
-  }
-
-  /* ------------------------------------------------- 3. UI e telecomando */
+  /* ------------------------------------------------- 2. UI e telecomando */
   if (top) {
     try { player.init(); d('player collegato'); } catch (e) { d('player KO: ' + e.message); }
     if (cfg.tvUi !== false) {
@@ -152,7 +138,6 @@ import { ui, show, hide, toast, focusPlayer } from './registry.js';
         case KEY.NEXT: case KEY.FF: player.next(); break;
         case KEY.PREV: case KEY.RW: player.prev(); break;
         case KEY.BLUE: show(); focusPlayer(); break;
-        case KEY.GREEN: toast(st.adBlocked ? 'Pubblicità bloccate: ' + st.adBlocked : 'Nessuna pubblicità bloccata'); break;
         case KEY.YELLOW: showDiag(); break;
         case KEY.RED: location.reload(); break;
         default: handled = false;
@@ -171,7 +156,7 @@ import { ui, show, hide, toast, focusPlayer } from './registry.js';
     if (handled) { e.preventDefault(); e.stopPropagation(); }
   }, true);
 
-  /* Diagnostica a schermo: elenco del modulo, errori, eventi del no-ads.
+  /* Diagnostica a schermo: elenco del modulo ed errori.
    * Serve perché sulla TV non si vede la console. */
   var diagBox = null;
   function showDiag() {
@@ -186,7 +171,6 @@ import { ui, show, hide, toast, focusPlayer } from './registry.js';
     }
     if (diagBox.style.display === 'block') { diagBox.style.display = 'none'; return; }
     var lines = diag.slice(-16);
-    try { lines = lines.concat(noads.adLogLines().slice(-10)); } catch (e) { }
     diagBox.textContent = 'Spotify TV Mod ' + window.__spotifyTv.version + '   (GIALLO chiude)\n' +
       'pagina: ' + location.href.substr(0, 80) + '\n' +
       '--- eventi ---\n' + lines.join('\n');

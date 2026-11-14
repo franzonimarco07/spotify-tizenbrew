@@ -13,9 +13,7 @@ const result = await build({
   outfile: 'dist/userScript.js',
   legalComments: 'inline',
   banner: {
-    js: `/* ${pkg.appName} v${pkg.version} — motore no-ads + UI TV per il web player di Spotify.
- * Modulo TizenBrew. Le parti di blocco delle pubblicità derivano da
- * T-64/spotify-ad-skip e tomer8007/spotify-web-ads-remover (GPL-3.0). */`
+    js: `/* ${pkg.appName} v${pkg.version} — UI TV per il web player di Spotify. Modulo TizenBrew. */`
   },
   logLevel: 'info'
 });

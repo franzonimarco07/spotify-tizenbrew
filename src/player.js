@@ -8,7 +8,6 @@
 
 import { on, emit } from './bus.js';
 import { st, setPlaying, setPosition, setVolume, setTrack, setAd } from './state.js';
-import { networkContext, fetchOriginal, adLog } from './noads.js';
 
 function q(sel) { return document.querySelector(sel); }
 
@@ -60,7 +59,7 @@ export function seek(deltaSeconds) {
       return;
     }
   }
-  adLog('barra di avanzamento non trovata');
+  if (window.console) console.warn('[spotify-tv] barra di avanzamento non trovata');
 }
 
 export function seekTo(ratio) {

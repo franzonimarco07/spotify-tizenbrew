@@ -1,4 +1,4 @@
-/* Piccolo bus di eventi condiviso fra i moduli (UI, no-ads, player).
+/* Piccolo bus di eventi condiviso fra i moduli (UI, player).
  * Gli hook devono partire subito (document_start), la UI arriva dopo: chi si
  * iscrive prima non deve perdere gli eventi già emessi, quindi ogni evento
  * conserva l'ultimo valore e viene "ripetuto" al nuovo iscritto. */
